@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EV Power Train Simulator</title>
+</head>
+<body>
+<div className="w-[1920px] h-[1080px] relative bg-stone-900 overflow-hidden">
+  <div className="w-80 h-7 left-[195px] top-[27px] absolute justify-start text-white text-2xl font-bold font-['Inter']">EV Power Train Simulator</div>
+  <div className="w-24 h-4 left-[21px] top-[713px] absolute justify-start text-white text-xs font-normal font-['Inter']">Results Summary</div>
+  <div className="w-[612px] h-60 left-[24px] top-[736.77px] absolute outline outline-1 outline-offset-[-0.50px] outline-neutral-500" />
+  <div className="left-[17px] top-[250px] absolute justify-start text-white text-xs font-normal font-['Inter']">Vehicle Parameters</div>
+  <div className="w-[612px] h-36 left-[20px] top-[271px] absolute outline outline-1 outline-offset-[-0.50px] outline-neutral-500" />
+  <div className="left-[29px] top-[286px] absolute justify-start text-white text-xs font-normal font-['Inter']">Drag Coeff (Cd):</div>
+  <div className="left-[29px] top-[318px] absolute justify-start text-white text-xs font-normal font-['Inter']">Rolling Resist (Cr):</div>
+  <div className="left-[29px] top-[350px] absolute justify-start text-white text-xs font-normal font-['Inter']">Mass (Kg):</div>
+  <div className="left-[29px] top-[382px] absolute justify-start"><span class="text-white text-xs font-normal font-['Inter']">Frontal Area (m</span><sup class="text-white text-xs font-normal font-['Inter']">2</sup><span class="text-white text-xs font-normal font-['Inter']">):</span></div>
+  <div className="w-72 h-5 left-[329px] top-[282px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[286px] absolute justify-start text-white text-xs font-normal font-['Inter']">0.80</div>
+  <div className="w-3.5 h-5 left-[604px] top-[283px] absolute bg-neutral-600 outline outline-1 outline-offset-[-0.50px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[315px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[319px] absolute justify-start text-white text-xs font-normal font-['Inter']">0.020</div>
+  <div className="w-3.5 h-5 left-[604px] top-[316px] absolute bg-neutral-600 outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[348px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[352px] absolute justify-start text-white text-xs font-normal font-['Inter']">150.00</div>
+  <div className="w-3.5 h-5 left-[604px] top-[349px] absolute bg-neutral-600 outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[377px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[381px] absolute justify-start text-white text-xs font-normal font-['Inter']">0.50</div>
+  <div className="w-3.5 h-5 left-[604px] top-[378px] absolute bg-neutral-600 outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[17px] top-[70px] absolute justify-start text-white text-xs font-normal font-['Inter']">Simulation Parameters</div>
+  <div className="w-[612px] h-36 left-[20px] top-[91px] absolute outline outline-1 outline-offset-[-0.50px] outline-neutral-500" />
+  <div className="left-[30px] top-[107px] absolute justify-start text-white text-xs font-normal font-['Inter']">Duration (s):</div>
+  <div className="left-[30px] top-[138px] absolute justify-start text-white text-xs font-normal font-['Inter']">Target Speed (km/h):</div>
+  <div className="left-[30px] top-[169px] absolute justify-start text-white text-xs font-normal font-['Inter']">Gradient ():</div>
+  <div className="left-[30px] top-[200px] absolute justify-start text-white text-xs font-normal font-['Inter']">Mode :</div>
+  <div className="w-72 h-5 left-[329px] top-[104px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[108px] absolute justify-start text-white text-xs font-normal font-['Inter']">60</div>
+  <div className="w-3.5 h-5 left-[604px] top-[105px] absolute bg-neutral-600 outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[132px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[132px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[136px] absolute justify-start text-white text-xs font-normal font-['Inter']">120.00</div>
+  <div className="w-3.5 h-5 left-[604px] top-[133px] absolute bg-neutral-600 outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[162px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[162px] absolute bg-zinc-800 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="left-[335px] top-[166px] absolute justify-start text-white text-xs font-normal font-['Inter']">0.0</div>
+  <div className="w-3.5 h-5 left-[604px] top-[163px] absolute bg-neutral-600 outline outline-[1.50px] outline-offset-[-0.75px] outline-black" />
+  <div className="w-72 h-5 left-[329px] top-[194px] absolute bg-neutral-600 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-stone-500" />
+  <div className="w-72 h-5 left-[329px] top-[194px] absolute bg-neutral-600 rounded-[3px] outline outline-[1.50px] outline-offset-[-0.75px] outline-stone-500" />
+  <div className="left-[335px] top-[198px] absolute justify-start text-white text-xs font-normal font-['Inter']">Boost</div>
+  <div className="left-[18px] top-[433px] absolute justify-start text-white text-xs font-normal font-['Inter']">Quick Scenarios</div>
+  <div className="w-[612px] h-28 left-[21px] top-[454px] absolute outline outline-1 outline-offset-[-0.50px] outline-neutral-500" />
+  <div className="w-[587px] h-5 left-[33px] top-[466px] absolute bg-neutral-600 rounded-[3px] outline outline-1 outline-offset-[-0.50px] outline-stone-500" />
+  <div className="left-[282px] top-[469px] absolute justify-start text-white text-xs font-normal font-['Inter']">Flat Terrain (0°)</div>
+  <div className="w-[587px] h-5 left-[33px] top-[496px] absolute bg-neutral-600 rounded-[3px] outline outline-1 outline-offset-[-0.50px] outline-stone-500" />
+  <div className="left-[274px] top-[499px] absolute justify-start text-white text-xs font-normal font-['Inter']">Moderate Hill (15°)</div>
+  <div className="w-[587px] h-5 left-[33px] top-[526px] absolute bg-neutral-600 rounded-[3px] outline outline-1 outline-offset-[-0.50px] outline-stone-500" />
+  <div className="left-[276px] top-[529px] absolute justify-start text-white text-xs font-normal font-['Inter']">Steep Climb (60°)</div>
+  <div className="w-[612px] h-7 left-[20px] top-[629.27px] absolute bg-neutral-600 rounded-[3px] outline outline-1 outline-offset-[-0.50px] outline-stone-500" />
+  <div className="w-24 h-4 left-[279px] top-[635px] absolute justify-start text-white text-xs font-normal font-['Inter']">💾 Export Results</div>
+  <div className="w-[612px] h-7 left-[20px] top-[668.52px] absolute bg-neutral-600 rounded-[3px] outline outline-1 outline-offset-[-0.50px] outline-stone-500" />
+  <div className="w-12 h-5 left-[295px] top-[672.45px] absolute justify-start text-white text-xs font-normal font-['Inter']">🔄️ Reset</div>
+  <div className="w-[612px] h-11 left-[20px] top-[573px] absolute bg-green-300 rounded" />
+  <div className="w-28 h-4 left-[271px] top-[588px] absolute justify-start text-white text-base font-semibold font-['Inter']">Run Simulation</div>
+  <div className="w-[1242px] h-[983.37px] left-[657px] top-[67px] absolute bg-white" />
+  <div className="w-52 h-6 left-[1214px] top-[80.87px] absolute justify-start text-black text-lg font-bold font-['Inter']">Vehicle Speed vs Time</div>
+  <div className="w-[1124px] h-0 left-[758px] top-[152.32px] absolute outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[1124px] h-0 left-[758px] top-[293.94px] absolute outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[1124px] h-0 left-[755px] top-[433.42px] absolute outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[1124px] h-0 left-[756.65px] top-[573.26px] absolute outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[1124.01px] h-0 left-[758.62px] top-[713.10px] absolute origin-top-left rotate-[-0.60deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[1124.01px] h-0 left-[758.91px] top-[852.95px] absolute origin-top-left rotate-[-0.75deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[1830px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[1658px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[1486px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[1314px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[1142px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[970px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[863.92px] h-0 left-[798px] top-[119.26px] absolute origin-top-left rotate-[90.13deg] outline outline-2 outline-offset-[-1px] outline-neutral-200"></div>
+  <div className="w-[1021px] h-[796.19px] left-[806.50px] top-[150.72px] absolute outline outline-[5px] outline-offset-[-2.50px] outline-blue-700" />
+  <div className="w-[1124px] h-[867.11px] left-[758px] top-[116.06px] absolute outline outline-2 outline-offset-[-1px] outline-black" />
+  <div className="w-28 left-[696px] top-[594.73px] absolute origin-top-left -rotate-90 justify-start text-black text-xl font-medium font-['Inter']">Speed (km/h)</div>
+  <div className="w-20 h-6 left-[1277px] top-[1014.11px] absolute justify-start text-black text-xl font-medium font-['Inter']">Time (s)</div>
+  <div className="w-3 h-6 left-[792px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">0</div>
+  <div className="w-5 h-6 left-[961px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">10</div>
+  <div className="w-5 h-6 left-[1133px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">20</div>
+  <div className="w-5 h-6 left-[1304px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">30</div>
+  <div className="w-5 h-6 left-[1475px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">40</div>
+  <div className="w-5 h-6 left-[1649px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">50</div>
+  <div className="w-5 h-6 left-[1819px] top-[988.51px] absolute justify-start text-black text-xs font-semibold font-['Inter']">60</div>
+  <div className="w-6 h-5 left-[726px] top-[142.73px] absolute justify-start text-black text-xs font-semibold font-['Inter']">120</div>
+  <div className="w-6 h-5 left-[726px] top-[282.45px] absolute justify-start text-black text-xs font-semibold font-['Inter']">100</div>
+  <div className="w-6 h-5 left-[726px] top-[423.23px] absolute justify-start text-black text-xs font-semibold font-['Inter']">  80</div>
+  <div className="w-6 h-5 left-[726px] top-[561.88px] absolute justify-start text-black text-xs font-semibold font-['Inter']">  60</div>
+  <div className="w-6 h-5 left-[726px] top-[702.67px] absolute justify-start text-black text-xs font-semibold font-['Inter']">  40</div>
+  <div className="w-6 h-5 left-[726px] top-[842.39px] absolute justify-start text-black text-xs font-semibold font-['Inter']">  20</div>
+  <div className="w-20 h-6 left-[657px] top-[37px] absolute bg-zinc-700 rounded-tl-[3px] rounded-tr-[3px] border-l border-r border-t border-zinc-600" />
+  <div className="w-12 h-2.5 left-[671px] top-[44px] absolute justify-start text-white text-xs font-semibold font-['Inter']">📈 Speed</div>
+  <div className="w-20 h-5 left-[732px] top-[41px] absolute bg-zinc-700 rounded-tl-[3px] rounded-tr-[3px] border-l border-r border-t border-zinc-600" />
+  <div className="w-12 h-2.5 left-[743px] top-[45px] absolute justify-start text-white text-xs font-semibold font-['Inter']">⚡ Power</div>
+  <div className="w-20 h-5 left-[808px] top-[41px] absolute bg-zinc-700 rounded-tl-[3px] rounded-tr-[3px] border-l border-r border-t border-zinc-600" />
+  <div className="w-12 h-2.5 left-[821px] top-[45px] absolute justify-start text-white text-xs font-semibold font-['Inter']">🔧 Forces</div>
+  <div className="w-20 h-5 left-[885px] top-[41px] absolute bg-zinc-700 rounded-tl-[3px] rounded-tr-[3px] border-l border-r border-t border-zinc-600" />
+  <div className="w-12 h-3 left-[898px] top-[46px] absolute justify-start text-white text-xs font-semibold font-['Inter']">⚙️ Motor</div>
+  <div className="w-20 h-5 left-[961px] top-[41px] absolute bg-zinc-700 rounded-tl-[3px] rounded-tr-[3px] border-l border-r border-t border-zinc-600" />
+  <div className="w-12 h-3 left-[974px] top-[46px] absolute justify-start text-white text-xs font-semibold font-['Inter']">🔋 Energy</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,85 @@
+{
+  "app_info": {
+    "name": "EV Power Train Simulation Tool",
+    "version": "1.0.0",
+    "author": "EV Simulation Team",
+    "description": "Desktop application for simulating EV power train performance"
+  },
+  "default_vehicle_parameters": {
+    "drag_coefficient": 0.8,
+    "rolling_resistance": 0.02,
+    "air_density": 1.164,
+    "frontal_area": 0.5,
+    "wheel_radius": 0.2795,
+    "gear_ratio": 5.221,
+    "vehicle_mass": 150.0,
+    "num_motors": 2,
+    "max_torque_per_motor_eco": 37.0,
+    "max_torque_per_motor_boost": 52.0,
+    "max_motor_rpm": 2746.0,
+    "max_power_eco": 4000.0,
+    "max_power_boost": 22000.0,
+    "gravity": 9.81
+  },
+  "simulation_defaults": {
+    "duration": 90,
+    "target_speed_kmh": 85,
+    "gradient_deg": 0,
+    "mode": "boost",
+    "time_step": 0.5
+  },
+  "scenarios": {
+    "flat_terrain": {
+      "name": "Flat Terrain (Highway)",
+      "duration": 90,
+      "target_speed": 85,
+      "gradient": 0,
+      "mode": "boost",
+      "description": "Simulates highway driving on level ground"
+    },
+    "moderate_hill": {
+      "name": "Moderate Hill Climb",
+      "duration": 120,
+      "target_speed": 60,
+      "gradient": 15,
+      "mode": "boost",
+      "description": "Simulates climbing a typical hill"
+    },
+    "steep_climb": {
+      "name": "Steep Climb (Extreme)",
+      "duration": 180,
+      "target_speed": 55,
+      "gradient": 60,
+      "mode": "boost",
+      "description": "Simulates extreme gradient climbing"
+    },
+    "eco_mode_test": {
+      "name": "Eco Mode Efficiency Test",
+      "duration": 120,
+      "target_speed": 50,
+      "gradient": 0,
+      "mode": "eco",
+      "description": "Tests efficiency in eco mode"
+    },
+    "urban_driving": {
+      "name": "Urban Driving Cycle",
+      "duration": 150,
+      "target_speed": 40,
+      "gradient": 0,
+      "mode": "eco",
+      "description": "Simulates city driving conditions"
+    }
+  },
+  "ui_settings": {
+    "window_width": 1400,
+    "window_height": 900,
+    "theme": "Fusion",
+    "plot_dpi": 100,
+    "default_tab": 0
+  },
+  "export_settings": {
+    "default_format": "csv",
+    "include_metadata": true,
+    "decimal_places": 4
+  }
+}
