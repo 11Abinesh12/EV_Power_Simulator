@@ -165,6 +165,28 @@ class EVSimulationApp(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Header bar with ePropelled_Text.jpg logo
+        header_widget = QWidget()
+        header_widget.setStyleSheet('border-bottom: 1px solid #ddd;')
+        header_widget.setMaximumHeight(60)
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(0)
+        
+        # ePropelled_Text.jpg Logo (200px width, fixed size, centered)
+        logo_label = QLabel()
+        logo_pixmap = QPixmap('ePropelled_Text.jpg')
+        if not logo_pixmap.isNull():
+            scaled_logo = logo_pixmap.scaledToWidth(200, Qt.TransformationMode.SmoothTransformation)
+            logo_label.setPixmap(scaled_logo)
+            logo_label.setFixedSize(200, scaled_logo.height())
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(logo_label)
+        
+        main_layout.addWidget(header_widget)
         
         # Top navbar tabs (global, outside splitter)
         self.nav_tabs = QTabWidget()
@@ -767,13 +789,22 @@ class EVSimulationApp(QMainWindow):
     
     def show_about(self):
         """Show about dialog"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle('About EV Simulation Tool')
+        dialog.setMinimumWidth(500)
+        
+        layout = QVBoxLayout()
+        
+        # About text
         about_text = """
-        <h2>EV Power Train Simulation Tool</h2>
-        <p><b>Version:</b> 1.0</p>
-        <p><b>Developed by:</b> ePropelled</p>
+        <h2 style='text-align:center;'>EV Power Train Simulation Tool</h2>
+        <p style='text-align:center;'><b>Version:</b> 1.0</p>
+        <p style='text-align:center;'><b>Developed by:</b> ePropelled</p>
         <br>
         <p>A comprehensive tool for simulating electric vehicle power train performance.</p>
-        <p>Features include:</p>
+        <p><b>Features include:</b></p>
         <ul>
             <li>Real-time performance simulation</li>
             <li>Motor and battery analysis</li>
@@ -782,7 +813,19 @@ class EVSimulationApp(QMainWindow):
             <li>Data export capabilities</li>
         </ul>
         """
-        QMessageBox.about(self, 'About EV Simulation Tool', about_text)
+        text_label = QLabel(about_text)
+        text_label.setWordWrap(True)
+        layout.addWidget(text_label)
+        
+        # Close button
+        from PyQt6.QtWidgets import QPushButton
+        close_btn = QPushButton('Close')
+        close_btn.setStyleSheet('padding: 8px; background-color: #2196F3; color: white; border-radius: 4px;')
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.setLayout(layout)
+        dialog.exec()
     
     def create_control_panel(self):
         """Create left control panel with scroll area"""
