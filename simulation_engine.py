@@ -14,21 +14,22 @@ class VehicleParameters:
     """Vehicle configuration parameters"""
     # Aerodynamic parameters
     drag_coefficient: float = 0.8  # Cd
-    rolling_resistance: float = 0.02  # Cr
+    rolling_resistance: float = 0.0214  # Cr (corrected from spreadsheet analysis)
     air_density: float = 1.164  # kg/m³
     frontal_area: float = 0.5  # m²
     
     # Mechanical parameters
     wheel_radius: float = 0.2795  # m
-    gear_ratio: float = 5.221
-    vehicle_mass: float = 150.0  # kg (estimated)
+    gear_ratio: float = 5.268  # Updated to match DCE simulation (was 4.960)
+    vehicle_mass: float = 160.4  # kg (corrected from spreadsheet analysis)
     
     # Motor parameters
     num_motors: int = 2
     max_torque_per_motor_eco: float = 37.0  # Nm
     max_torque_per_motor_boost: float = 52.0  # Nm
-    max_motor_rpm: float = 2746.0
-    max_power_eco: float = 4000.0  # W
+    base_rpm: float = 258.0  # RPM at which constant power region begins (calculated from P=T*ω)
+    max_motor_rpm: float = 2500.0  # Updated to match DCE simulation (was 2746.0)
+    max_power_eco: float = 4000.0  # W (2000W per motor × 2 motors)
     max_power_boost: float = 22000.0  # W
     
     # Gravity
@@ -77,39 +78,57 @@ class EVSimulationEngine:
         }
     
     def calculate_motor_rpm(self, speed_ms: float) -> float:
-        """Calculate motor RPM from vehicle speed"""
+        """Calculate motor RPM from vehicle speed
+        Excel Formula: RPM = (Speed*GearRatio)/(2*3.1415*WheelRadius*0.001*60)
+        Note: In Excel, WheelRadius is in meters, and 0.001 is used in a different context
+        Correct interpretation: RPM = (Speed_kmh * GearRatio) / (2 * 3.1415 * WheelRadius * 60)
+        where WheelRadius is in meters and Speed is in km/h
+        """
         if speed_ms <= 0:
             return 0.0
-        # RPM = (speed / wheel_radius) * (60 / 2π) * gear_ratio
-        wheel_angular_velocity = speed_ms / self.params.wheel_radius  # rad/s
-        motor_angular_velocity = wheel_angular_velocity * self.params.gear_ratio
-        rpm = motor_angular_velocity * 60 / (2 * math.pi)
-        return min(rpm, self.params.max_motor_rpm)
+        # Convert m/s to km/h for Excel formula
+        speed_kmh = speed_ms * 3.6
+        # Corrected Excel formula interpretation:
+        # RPM = (Speed_kmh * GearRatio) / (2 * π * WheelRadius_m * 60)
+        # This gives wheel speed, then multiply by gear ratio for motor RPM
+        # Actually: Motor_RPM = Wheel_RPM * GearRatio
+        # Wheel_RPM = (Linear_Speed_m/s) / (2 * π * WheelRadius_m) * 60
+        wheel_rpm = (speed_ms / (2 * 3.1415 * self.params.wheel_radius)) * 60
+        motor_rpm = wheel_rpm * self.params.gear_ratio
+        return min(motor_rpm, self.params.max_motor_rpm)
     
     def calculate_rolling_resistance(self, gradient_deg: float) -> float:
-        """Calculate rolling resistance force"""
-        gradient_rad = math.radians(gradient_deg)
-        F_roll = (self.params.rolling_resistance * 
-                  self.params.vehicle_mass * 
-                  self.params.gravity * 
-                  math.cos(gradient_rad))
+        """Calculate rolling resistance force
+        Excel Formula: Froll(N) = Cr*(KerbWeight+LoadWeight)*9.8
+        """
+        # Excel formula uses simplified version without cos(angle)
+        # Froll = Cr * (KerbWeight + LoadWeight) * 9.8
+        F_roll = self.params.rolling_resistance * self.params.vehicle_mass * 9.8
         return F_roll
     
     def calculate_drag_force(self, speed_ms: float) -> float:
-        """Calculate aerodynamic drag force"""
-        F_drag = (0.5 * 
-                  self.params.drag_coefficient * 
+        """Calculate aerodynamic drag force
+        Excel Formula: Fdrag(N) = Cd*Density*Area*Speed*Speed*0.03858025308642
+        Where 0.03858025308642 = 0.5/(3.6^2) for km/h input
+        """
+        # Convert m/s to km/h for Excel formula
+        speed_kmh = speed_ms * 3.6
+        # Excel formula: Fdrag = Cd * Density * Area * Speed_kmh^2 * 0.03858025308642
+        F_drag = (self.params.drag_coefficient * 
                   self.params.air_density * 
                   self.params.frontal_area * 
-                  speed_ms ** 2)
+                  speed_kmh * speed_kmh * 0.03858025308642)
         return F_drag
     
     def calculate_climbing_force(self, gradient_deg: float) -> float:
-        """Calculate climbing resistance force"""
-        gradient_rad = math.radians(gradient_deg)
+        """Calculate climbing resistance force
+        Excel Formula: FClimb(N) = (KerbWeight+LoadWeight)*9.8*SIN(Angle*0.01745329)
+        Where 0.01745329 = π/180 (degrees to radians)
+        """
+        # Excel formula: FClimb = (KerbWeight + LoadWeight) * 9.8 * sin(Angle * 0.01745329)
         F_climb = (self.params.vehicle_mass * 
-                   self.params.gravity * 
-                   math.sin(gradient_rad))
+                   9.8 * 
+                   math.sin(gradient_deg * 0.01745329))
         return F_climb
     
     def calculate_tractive_force(self, motor_torque: float) -> float:
@@ -119,30 +138,133 @@ class EVSimulationEngine:
                       self.params.wheel_radius)
         return F_tractive
     
-    def calculate_required_torque(self, target_speed: float, gradient_deg: float, mode: str) -> float:
-        """Calculate required motor torque to maintain/reach target speed"""
-        # Calculate resistance forces
+    def calculate_acceleration_terms_excel(self, acc_speed_kmh: float, acc_time: float, inertia: float = 1.1) -> tuple:
+        """Calculate acceleration terms using exact Excel formulas
+        
+        Excel Formulas:
+        Term1 = ((Inertia*GVW)/(2*AccTime))*((AccSpeed*0.277777777777777)^2)+((AccSpeed*0.277777777777777)^2))
+        Term2 = (Density*Cd*Area*(AccSpeed*0.277777777777777)*(AccSpeed*0.277777777777777)*(AccSpeed*0.277777777777777))/5
+        Term3 = (2*Cr*GVW*9.8*(AccSpeed*0.277777777777777))/3
+        
+        Args:
+            acc_speed_kmh: Acceleration end speed in km/h
+            acc_time: Acceleration time in seconds
+            inertia: Inertia factor (default 1.1)
+        
+        Returns:
+            Tuple of (Term1, Term2, Term3)
+        """
+        # Convert km/h to m/s: 0.277777777777777 = 1/3.6
+        acc_speed_ms = acc_speed_kmh * 0.277777777777777
+        gvw = self.params.vehicle_mass
+        
+        # Term1: Inertial component
+        term1 = ((inertia * gvw) / (2 * acc_time)) * (
+            (acc_speed_ms ** 2) + (acc_speed_ms ** 2)
+        )
+        
+        # Term2: Aerodynamic component
+        term2 = (self.params.air_density * self.params.drag_coefficient * 
+                 self.params.frontal_area * acc_speed_ms * acc_speed_ms * acc_speed_ms) / 5
+        
+        # Term3: Rolling resistance component
+        term3 = (2 * self.params.rolling_resistance * gvw * 9.8 * acc_speed_ms) / 3
+        
+        return term1, term2, term3
+    
+    def calculate_required_power_for_acceleration_excel(self, acc_speed_kmh: float, acc_time: float, 
+                                                        gear_efficiency: float = 0.95, 
+                                                        motor_efficiency: float = 0.90,
+                                                        inertia: float = 1.1) -> float:
+        """Calculate required power for acceleration using exact Excel formula
+        
+        Excel Formula:
+        Required Power for Acceleration = (Term1+Term2+Term3)/(GearEfficency*MotorEfficiency)
+        
+        Args:
+            acc_speed_kmh: Acceleration end speed in km/h
+            acc_time: Acceleration time in seconds
+            gear_efficiency: Gear efficiency (0.95 = 95%)
+            motor_efficiency: Motor efficiency (0.90 = 90%)
+            inertia: Inertia factor (default 1.1)
+        
+        Returns:
+            Required power in Watts
+        """
+        term1, term2, term3 = self.calculate_acceleration_terms_excel(acc_speed_kmh, acc_time, inertia)
+        required_power = (term1 + term2 + term3) / (gear_efficiency * motor_efficiency)
+        return required_power
+    
+    def calculate_motor_torque_with_curve(self, rpm: float, mode: str = 'boost') -> float:
+        """
+        Calculate motor torque with constant torque/constant power regions
+        Implements: Torque = IF((RPM<BaseRPM), (ConstantTorque), ((ConstantPower*60)/(2*PI()*RPM))) * 2
+        
+        Args:
+            rpm: Motor RPM
+            mode: 'eco' or 'boost'
+        
+        Returns:
+            Total motor torque (Nm) for all motors
+        """
+        # Motor parameters based on mode
+        if mode == 'boost':
+            constant_torque_per_motor = self.params.max_torque_per_motor_boost  # 52 Nm
+            constant_power = self.params.max_power_boost  # 22000 W
+        else:  # eco mode
+            constant_torque_per_motor = self.params.max_torque_per_motor_eco  # 37 Nm
+            constant_power = self.params.max_power_eco  # 4000 W
+        
+        base_rpm = self.params.base_rpm
+        num_motors = self.params.num_motors
+        
+        # Piecewise torque calculation
+        if rpm <= base_rpm:
+            # Constant torque region (below, at, or starting from 0 RPM)
+            # At startup (rpm=0), motor provides full constant torque
+            total_torque = constant_torque_per_motor * num_motors
+        else:
+            # Constant power region (above base RPM): T = (P * 60) / (2π * RPM)
+            # Power is distributed among motors
+            torque_per_motor = (constant_power / num_motors * 60) / (2 * math.pi * rpm)
+            total_torque = torque_per_motor * num_motors
+        
+        return total_torque
+    
+    def calculate_required_torque(self, target_speed: float, gradient_deg: float, mode: str, current_rpm: float = 0) -> float:
+        """
+        Calculate required motor torque to maintain/reach target speed
+        Uses piecewise torque curve (constant torque/constant power regions)
+        
+        Args:
+            target_speed: Target speed in m/s
+            gradient_deg: Road gradient in degrees
+            mode: 'eco' or 'boost'
+            current_rpm: Current motor RPM (for torque curve lookup)
+        
+        Returns:
+            Motor torque limited by motor capability curve
+        """
+        # Get maximum available torque from motor curve at current RPM
+        max_available_torque = self.calculate_motor_torque_with_curve(current_rpm, mode)
+        
+        # If accelerating, use full available motor torque for maximum acceleration
+        if target_speed > self.state.speed:
+            return max_available_torque
+        
+        # If at target speed, calculate torque needed to overcome resistance
         F_roll = self.calculate_rolling_resistance(gradient_deg)
-        F_drag = self.calculate_drag_force(target_speed)
+        F_drag = self.calculate_drag_force(self.state.speed)
         F_climb = self.calculate_climbing_force(gradient_deg)
         F_total_resistance = F_roll + F_drag + F_climb
         
-        # Add acceleration force if accelerating
-        if target_speed > self.state.speed:
-            # Assume 2 m/s² acceleration
-            F_acceleration = self.params.vehicle_mass * 2.0
-            F_total_resistance += F_acceleration
-        
-        # Calculate required torque
+        # Calculate required torque from resistance forces
         required_torque = (F_total_resistance * 
                           self.params.wheel_radius / 
                           self.params.gear_ratio)
         
-        # Limit to motor capabilities
-        max_torque = (self.params.max_torque_per_motor_boost if mode == 'boost' 
-                     else self.params.max_torque_per_motor_eco) * self.params.num_motors
-        
-        return min(required_torque, max_torque)
+        # Return the minimum of required and available torque
+        return min(required_torque, max_available_torque)
     
     def step(self, dt: float, target_speed_kmh: float, gradient_deg: float, mode: str = 'boost'):
         """
@@ -156,8 +278,11 @@ class EVSimulationEngine:
         """
         target_speed_ms = target_speed_kmh / 3.6
         
-        # Calculate motor torque needed
-        motor_torque = self.calculate_required_torque(target_speed_ms, gradient_deg, mode)
+        # Calculate current motor RPM based on current speed
+        current_motor_rpm = self.calculate_motor_rpm(self.state.speed)
+        
+        # Calculate motor torque needed (limited by motor curve at current RPM)
+        motor_torque = self.calculate_required_torque(target_speed_ms, gradient_deg, mode, current_motor_rpm)
         
         # Calculate forces
         F_tractive = self.calculate_tractive_force(motor_torque)
@@ -177,7 +302,7 @@ class EVSimulationEngine:
         else:
             new_speed = max(new_speed, 0)
         
-        # Update motor RPM
+        # Update motor RPM based on new speed
         motor_rpm = self.calculate_motor_rpm(new_speed)
         
         # Calculate motor power
@@ -235,6 +360,28 @@ class EVSimulationEngine:
             dt: Time step in seconds
         """
         self.reset()
+        
+        # Record initial state (t=0) to show power ramp-up from 0
+        self.history['time'].append(0.0)
+        self.history['speed_ms'].append(0.0)
+        self.history['speed_kmh'].append(0.0)
+        self.history['motor_rpm'].append(0.0)
+        self.history['motor_torque'].append(0.0)
+        self.history['motor_power'].append(0.0)  # kW (starts at 0)
+        self.history['tractive_force'].append(0.0)
+        self.history['rolling_resistance'].append(
+            self.calculate_rolling_resistance(gradient_deg))
+        self.history['drag_force'].append(0.0)
+        self.history['climbing_force'].append(
+            self.calculate_climbing_force(gradient_deg))
+        self.history['total_resistance'].append(
+            self.calculate_rolling_resistance(gradient_deg) + 
+            self.calculate_climbing_force(gradient_deg))
+        self.history['net_force'].append(0.0)
+        self.history['acceleration'].append(0.0)
+        self.history['distance'].append(0.0)
+        self.history['energy'].append(0.0)
+        
         num_steps = int(duration / dt)
         
         for _ in range(num_steps):

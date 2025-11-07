@@ -27,5 +27,8 @@ env/
 ehthumbs.db
 Thumbs.db
 
-# Ignore any EV_Power_Simulator directory if it exists
-EV_Power_Simulator/
+# Ignore specific folders
+Docs/
+Excel_Analysis/
+Parameters/
+

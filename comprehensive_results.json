@@ -1,0 +1,180 @@
+{
+  "basic_forces": {
+    "Fdrag_cont_N": 44.90741459259288,
+    "Fdrag_slope_N": 0.4490741459259288,
+    "Froll_N": 29.400000000000002,
+    "FClimb_N": 734.9999037590283
+  },
+  "ev_acceleration_power": {
+    "vehicle_speed_motor_base_ms": 5.60588169571602,
+    "vehicle_acc_speed_ms": 13.88888888888885,
+    "Term1": 3067.1296296296127,
+    "Term2": 249.48559670781688,
+    "Term3": 272.2222222222215,
+    "required_power_acceleration_W": 4444.380741250342
+  },
+  "ev_motor_input_power": {
+    "zero_gradient_max_speed_W": 1278.0774086203312,
+    "max_slope_speed_W": 1315.5298230011567,
+    "acceleration_W": 4444.380741250342
+  },
+  "ev_motor_output_power": {
+    "zero_gradient_max_speed_W": 1086.3657973272814,
+    "max_slope_speed_W": 1118.2003495509832,
+    "acceleration_W": 3777.723630062791
+  },
+  "ev_motor_torque_rpm": {
+    "zero_gradient": {
+      "RPM": 2477.5565455658284,
+      "Torque_Nm": 4.187325283549935
+    },
+    "acceleration": {
+      "RPM": 2477.5565455658284,
+      "Torque_Nm": 14.560986464543882
+    },
+    "max_slope": {
+      "RPM": 247.75565455658284,
+      "Torque_Nm": 43.10029464540124
+    }
+  },
+  "ev_wheel_power": {
+    "zero_gradient_max_speed_W": 1032.0475074609174,
+    "acceleration_W": 3588.8374485596514,
+    "max_slope_speed_W": 1062.290332073434
+  },
+  "ev_wheel_torque_rpm": {
+    "zero_gradient": {
+      "RPM": 474.5367832916737,
+      "Torque_Nm": 20.768924040143503
+    },
+    "max_slope": {
+      "RPM": 47.453678329167374,
+      "Torque_Nm": 213.77530642645786
+    },
+    "acceleration": {
+      "RPM": 0,
+      "Torque_Nm": 0
+    }
+  },
+  "ugv_per_motor_output_power": {
+    "zero_gradient_max_speed_W": 543.1828986636407,
+    "max_slope_speed_W": 559.1001747754916,
+    "acceleration_W": 1888.8618150313955
+  },
+  "ugv_motor_torque_rpm": {
+    "zero_gradient": {
+      "RPM": 2477.5565455658284,
+      "Torque_Nm": 2.0936626417749675
+    },
+    "acceleration": {
+      "RPM": 2477.5565455658284,
+      "Torque_Nm": 7.280493232271941
+    },
+    "max_slope": {
+      "RPM": 247.75565455658284,
+      "Torque_Nm": 21.55014732270062
+    }
+  },
+  "ugv_per_wheel_power": {
+    "zero_gradient_max_speed_W": 516.0237537304587,
+    "acceleration_W": 1794.4187242798257,
+    "max_slope_speed_W": 531.145166036717
+  },
+  "ugv_wheel_torque_rpm": {
+    "zero_gradient": {
+      "RPM": 474.5367832916737,
+      "Torque_Nm": 10.384462020071751
+    },
+    "max_slope": {
+      "RPM": 47.453678329167374,
+      "Torque_Nm": 106.88765321322893
+    },
+    "acceleration": {
+      "RPM": 0,
+      "Torque_Nm": 0
+    }
+  },
+  "ugv_skid_parameters": {
+    "total_skid_friction_force_N": 1029.0,
+    "perwheel_skid_friction_force_N": 514.5,
+    "wheel_linear_speed_turning_ms": 0.15,
+    "power_per_motor_turn_W": 77.175,
+    "total_power_all_motors_W": 154.35,
+    "wheel_rpm": 4.7746485,
+    "vehicle_rotation_deg_per_sec": 28.6479,
+    "total_wheel_torque_Nm": 287.6055,
+    "total_motor_wheel_torque_Nm": 55.086286152078145,
+    "per_motor_wheel_torque_Nm": 27.543143076039073
+  },
+  "battery_capacity": {
+    "drive_pattern_slabs": [
+      {
+        "slab_name": "Slab-1 Max Speed",
+        "speed_kmph": 50,
+        "drive_percentage": 35.0,
+        "gradient_deg": 0.0,
+        "distance_km": 24.5,
+        "fclimb_N": 0.0,
+        "fdrag_N": 44.90741459259288,
+        "froll_N": 29.400000000000002,
+        "motor_input_power_W": 1278.0774086203312,
+        "motor_output_power_W": 1086.3657973272814,
+        "battery_current_A": 53.25322535918047,
+        "useable_energy_Wh": 626.2579302239624,
+        "true_usable_ah": 26.09408042599843,
+        "final_ah": 27.89528175012732
+      },
+      {
+        "slab_name": "Slab-2 Speed",
+        "speed_kmph": 35,
+        "drive_percentage": 40.0,
+        "gradient_deg": 0.0,
+        "distance_km": 28.0,
+        "fclimb_N": 0.0,
+        "fdrag_N": 22.00463315037051,
+        "froll_N": 29.400000000000002,
+        "motor_input_power_W": 618.9068813883526,
+        "motor_output_power_W": 526.0708491800998,
+        "battery_current_A": 25.787786724514692,
+        "useable_energy_Wh": 495.1255051106821,
+        "true_usable_ah": 20.630229379611755,
+        "final_ah": 22.302408276827048
+      },
+      {
+        "slab_name": "Slab-3 Speed",
+        "speed_kmph": 25,
+        "drive_percentage": 20.0,
+        "gradient_deg": 0.0,
+        "distance_km": 14.0,
+        "fclimb_N": 0.0,
+        "fdrag_N": 11.22685364814822,
+        "froll_N": 29.400000000000002,
+        "motor_input_power_W": 349.3881742199563,
+        "motor_output_power_W": 296.97994808696285,
+        "battery_current_A": 14.557840592498179,
+        "useable_energy_Wh": 195.65737756317552,
+        "true_usable_ah": 8.15239073179898,
+        "final_ah": 9.21156879383604
+      },
+      {
+        "slab_name": "Slab-4 Speed",
+        "speed_kmph": 5,
+        "drive_percentage": 5.0,
+        "gradient_deg": 30.0,
+        "distance_km": 3.5,
+        "fclimb_N": 734.9999037590283,
+        "fdrag_N": 0.4490741459259288,
+        "froll_N": 29.400000000000002,
+        "motor_input_power_W": 1315.5298230011567,
+        "motor_output_power_W": 1118.2003495509832,
+        "battery_current_A": 54.8137426250482,
+        "useable_energy_Wh": 920.8708761008096,
+        "true_usable_ah": 38.36961983753373,
+        "final_ah": 40.27194978652664
+      }
+    ],
+    "total_final_battery_capacity_ah": 99.68120860731705,
+    "total_final_battery_capacity_wh": 2392.349006575609,
+    "vehicle_range_km": 70
+  }
+}

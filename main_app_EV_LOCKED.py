@@ -9,8 +9,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QComboBox, QGroupBox, QGridLayout, QTabWidget,
                              QTextEdit, QFileDialog, QMessageBox, QProgressBar,
                              QDoubleSpinBox, QSpinBox, QMenuBar, QMenu, QSplitter,
-                             QStackedWidget, QScrollArea, QTableWidget, QTableWidgetItem,
-                             QHeaderView)
+                             QStackedWidget, QScrollArea)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QIcon, QPalette, QColor, QPixmap
 import matplotlib
@@ -72,7 +71,7 @@ EV_DEFAULTS = {
     'true_capacity_ah': 77.0,      # Ah
     'tentative_ah': 78.0,          # Ah
     'tentative_wh': 1870.0,        # Wh
-    'battery_weight_total': 12,  # kg
+    'battery_weight_total': 10.5,  # kg
     
     # Performance Parameters
     'rotary_inertia': 1.06,
@@ -88,70 +87,13 @@ EV_DEFAULTS = {
 EV_DEFAULTS['kerb_weight'] = EV_DEFAULTS['battery_weight_input'] + EV_DEFAULTS['vehicle_weight']
 EV_DEFAULTS['gvw'] = EV_DEFAULTS['kerb_weight'] + EV_DEFAULTS['passenger_weight']
 
-# UGV Default Parameters (Unmanned Ground Vehicle)
-UGV_DEFAULTS = {
-    # Physical Parameters
-    'wheel_radius': 0.559/2,            # m
-    'cd': 0.8,                         # Drag coefficient
-    'cr': 0.02,                        # Rolling resistance coefficient
-    'frontal_area': 0.5,               # m²
-    'air_density': 1.164,              # kg/m³
-    
-    # Drivetrain Parameters
-    'gear_ratio': 5.221,
-    'gear_efficiency': 95.0,           # %
-    'motor_efficiency': 85.0,          # %
-    'motor_base_rpm': 500,
-    
-    # Weight Parameters
-    'battery_weight_input': 10.5,   # kg
-    'vehicle_weight': 150.0,       # kg
-    'passenger_weight': 0.0,       # kg
-    'motor_controller_weight': 0.0, # kg
-    'other_weights': 0.0,          # kg
-    'generator_weight': 0.0,       # kg       
-    
-    # Battery Parameters
-    'battery_requirements': 'Lithium',
-    'battery_chemistry': 'NCM',
-    'battery_voltage': 24.0,       # V
-    'weight_per_wh': 0.0065,       # kg/Wh (approx. 154 Wh/kg)
-    'peukert_coeff': 1.05,
-    'discharge_hr': 2.0,           # Hr
-    'dod_pct': 100.0,              # %
-    'battery_current': 55.0,       # A
-    'true_capacity_wh': 1839.0,    # Wh
-    'true_capacity_ah': 77.0,      # Ah
-    'tentative_ah': 78.0,          # Ah
-    'tentative_wh': 1870.0,        # Wh
-    'battery_weight_total': 12,  # kg    
-    
-    # Performance Parameters
-    'rotary_inertia': 1.06,
-    'max_speed': 50.0,             # km/h
-    'slope_speed': 5.0,            # km/h
-    'gradeability': 30.0,          # degrees
-    'accel_end_speed': 50.0,       # km/h
-    'accel_period': 5.0,           # seconds
-    'vehicle_range': 70.0,         # km
-    
-    # UGV-Specific Parameters
-    'step_height': 0.1,                # m
-    'num_wheels': 4,                   # Total number of wheels
-    'num_powered_wheels': 2,           # Number of powered wheels
-    'track_width': 0.6,                # m (distance between left and right wheels)
-    'skid_coefficient': 0.7,           # Coefficient of friction for skid turning
-    'spin_angular_rad': 0.5,           # rad/s (angular velocity during spin)
+# Energy density by battery chemistry (Wh/kg)
+BATTERY_ENERGY_DENSITY = {
+    'NCM': 250,  # Nickel Cobalt Manganese
+    'NCA': 260,  # Nickel Cobalt Aluminum
+    'LFP': 160,  # Lithium Iron Phosphate
+    'LTO': 80    # Lithium Titanate Oxide
 }
-
-# Calculated UGV Weight Parameters (derived from base values)
-UGV_DEFAULTS['kerb_weight'] = UGV_DEFAULTS['battery_weight_input'] + UGV_DEFAULTS['vehicle_weight']
-UGV_DEFAULTS['gvw'] = UGV_DEFAULTS['kerb_weight'] + UGV_DEFAULTS['passenger_weight']
-
-# Calculated UGV-Specific Parameters (derived from base values)
-UGV_DEFAULTS['load_per_wheel'] = UGV_DEFAULTS['gvw'] / UGV_DEFAULTS['num_wheels']  # kg per wheel
-UGV_DEFAULTS['torque_climb'] = UGV_DEFAULTS['step_height'] * 9.81 * UGV_DEFAULTS['load_per_wheel']  # Nm
-UGV_DEFAULTS['spin_angular_deg'] = UGV_DEFAULTS['spin_angular_rad'] * 57.2958  # rad/s to deg/s
 
 # Physical constants
 GRAVITY = 9.81  # m/s²
@@ -353,7 +295,6 @@ class EVSimulationApp(QMainWindow):
         
         # Initialize calculated weight fields
         self.update_ev_calculated_weights()
-        self.update_ugv_calculated_weights()
 
         self.statusBar().showMessage('Ready')
     
@@ -586,7 +527,7 @@ class EVSimulationApp(QMainWindow):
             gear_efficiency = self.ugv_gear_efficiency_input.value() / 100.0
             motor_efficiency = self.ugv_motor_efficiency_input.value() / 100.0
             motor_base_rpm = self.ugv_motor_base_rpm_input.value()
-            vehicle_weight_input = self.ugv_vehicle_weight_input.value()
+            vehicle_mass = self.ugv_vehicle_weight_input.value()
             cd = self.ugv_cd_input.value()
             cr = self.ugv_cr_input.value()
             frontal_area = self.ugv_frontal_area_input.value()
@@ -597,11 +538,6 @@ class EVSimulationApp(QMainWindow):
             accel_end_speed = self.ugv_accel_end_speed_input.value()
             accel_period = self.ugv_accel_period_input.value()
             rotary_inertia = self.ugv_rotary_inertia_input.value()
-            
-            # For UGV, use GVW field (same as EV)
-            gvw_input = self.ugv_gvw_input.value()
-            calculated_gvw = gvw_input
-            vehicle_mass = vehicle_weight_input
         
         # Convert speeds to m/s
         max_speed_ms = max_speed / 3.6
@@ -686,117 +622,119 @@ class EVSimulationApp(QMainWindow):
         rpm_wheel_accel = (accel_end_speed_ms * 60) / (2 * math.pi * wheel_radius)
         torque_wheel_accel = (wheel_power_accel * 60) / (2 * math.pi * rpm_wheel_accel) 
         
-        # --- BATTERY CALCULATIONS USING FORMULAS (EV ONLY) ---
-        if vehicle_type == 'EV':
-            # Get battery voltage and vehicle range
-            battery_voltage = self.ev_battery_voltage_input.value()
-            vehicle_range_km = self.ev_vehicle_range_input.value()
-            
-            # Battery parameters from inputs
-            battery_chemistry = self.ev_battery_chem_input.currentText()
-            battery_requirements = self.ev_battery_req_input.currentText()
-            weight_per_wh = self.ev_weight_per_wh_input.value()
-            peukert_coeff = self.ev_peukert_input.value()
-            discharge_hr = self.ev_discharge_hr_input.value()
-            dod_pct = self.ev_dod_input.value()
-
-            
-            # Formula 1: Constant Speed Battery Current (A) = (Zero Gradient Max Speed Power (W)) / Battery Voltage
-            calculated_battery_current = motor_input_max / battery_voltage 
-            
-            # Formula 2: True usable Battery Capacity Wh = (Vehicle Range * Zero Gradient Max Speed Power) / (ContSpeed * (DoD% / 100))
-            calculated_true_capacity_wh = (vehicle_range_km * motor_input_max) / (max_speed * (dod_pct / 100.0))
-            
-            # Formula 3: True usable Battery Ah = True Capacity Wh / Battery voltage
-            calculated_true_capacity_ah = calculated_true_capacity_wh / battery_voltage 
-            
-            # Formula 4: Tentative battery Ah for given Discharge Hr (with Peukert correction)
-            # Tentative_Ah = (True_Ah * ((Battery_Current * discharge_hr)^(peukert_coeff - 1)))^(1/peukert_coeff)
-            calculated_tentative_ah = (calculated_true_capacity_ah * ((calculated_battery_current * discharge_hr) ** (peukert_coeff - 1))) ** (1/peukert_coeff)
-            
-            # Formula 5: Tentative battery Capacity Wh = Battery_voltage * Tentative_Ah
-            calculated_tentative_wh = battery_voltage * calculated_tentative_ah
-            
-            # Formula 6: Battery Weight = Tentative_Wh * weight_per_wh
-            calculated_battery_weight = calculated_tentative_wh * weight_per_wh
-            
-            # Store battery analysis results
-            ev_battery_analysis = {
-                'requirements': battery_requirements,
-                'chemistry': battery_chemistry,
-                'battery_voltage': battery_voltage,
-                'weight_per_wh': weight_per_wh,
-                'peukert_coeff': peukert_coeff,
-                'discharge_hr': discharge_hr,
-                'dod_pct': dod_pct,
-                'battery_current': calculated_battery_current,
-                'nominal_capacity_wh': calculated_true_capacity_wh,
-                'nominal_capacity_ah': calculated_true_capacity_ah,
-                'peukert_adjusted_ah': calculated_tentative_ah,
-                'peukert_adjusted_wh': calculated_tentative_wh,
-                'calculated_battery_weight': calculated_battery_weight
-            }
-            
-            # --- BATTERY CAPACITY WITH DRIVE PATTERN ---
-            # Define drive pattern slabs (speed, drive%, gradient, distance%)
-            slabs = [
-                {'name': 'Slab-1 Max Speed', 'speed': max_speed, 'drive_pct': 35, 'gradient': 0.0},
-                {'name': 'Slab-2 Speed', 'speed': max_speed * 0.7, 'drive_pct': 40, 'gradient': 0.0},  # 35 km/h
-                {'name': 'Slab-3 Speed', 'speed': max_speed * 0.5, 'drive_pct': 20, 'gradient': 0.0},  # 25 km/h
-                {'name': 'Slab-4 Speed', 'speed': slope_speed, 'drive_pct': 5, 'gradient': gradeability},
-            ]
-            
-            # Use vehicle_range_km (already defined above) for slab calculations
-            vehicle_range_total = vehicle_range_km
-            
-            slab_data = []
-            total_usable_ah = 0
-            
-            for slab in slabs:
-                speed_kmh = slab['speed']
-                speed_ms = speed_kmh / 3.6
-                gradient_deg = slab['gradient']
-                drive_pct = slab['drive_pct']
-                distance_km = (vehicle_range_total * drive_pct)/100
-                
-                # Calculate forces
-                F_drag_slab = cd * air_density * frontal_area * speed_kmh * speed_kmh * 0.03858025308642
-                F_roll_slab = cr * calculated_gvw * 9.81
-                F_climb_slab =  calculated_gvw * 9.81 * math.sin(gradient_deg*0.01745329)
-                
-                # Power calculations
-                power_wheel_slab = (F_drag_slab + F_roll_slab + F_climb_slab)
-                motor_output_slab = power_wheel_slab * (speed_kmh * 0.2777778) / gear_efficiency
-                motor_input_slab = power_wheel_slab * (speed_kmh * 0.2777778) / (gear_efficiency * motor_efficiency)
-                
-                # Battery current
-                battery_current_slab = motor_input_slab / battery_voltage 
+        # --- BATTERY CALCULATIONS USING FORMULAS ---
+        # Get battery voltage and vehicle range
+        battery_voltage = self.ev_battery_voltage_input.value() if vehicle_type == 'EV' else 24.0
+        vehicle_range_km = self.ev_vehicle_range_input.value() if vehicle_type == 'EV' else 70.0
         
-                # Energy and capacity
-                usable_energy_wh = (motor_input_slab * distance_km) / (speed_kmh * (dod_pct/100))
-                true_usable_ah = usable_energy_wh / battery_voltage
-                final_ah = (true_usable_ah * ((battery_current_slab * discharge_hr) ** (peukert_coeff - 1))) ** (1/peukert_coeff)
-                
-                total_usable_ah += true_usable_ah
-                
-                slab_data.append({
-                    'name': slab['name'],
-                    'speed': speed_kmh,
-                    'drive_pct': drive_pct,
-                    'gradient': gradient_deg,
-                    'distance': distance_km,
-                    'F_climb': F_climb_slab,
-                    'F_drag': F_drag_slab,
-                    'F_roll': F_roll_slab,
-                    'motor_input': motor_input_slab,
-                    'motor_output': motor_output_slab,
-                    'battery_current': battery_current_slab,
-                    'usable_energy': usable_energy_wh,
-                    'true_usable_ah': true_usable_ah,
-                    'final_ah': final_ah
-                })
+        # Battery parameters from inputs
+        battery_chemistry = self.ev_battery_chem_input.currentText() if vehicle_type == 'EV' else 'NCM'
+        battery_requirements = self.ev_battery_req_input.currentText() if vehicle_type == 'EV' else 'Lithium'
+        weight_per_wh = self.ev_weight_per_wh_input.value() if vehicle_type == 'EV' else 0.0065
+        peukert_coeff = self.ev_peukert_input.value() if vehicle_type == 'EV' else 1.05
+        discharge_hr = self.ev_discharge_hr_input.value() if vehicle_type == 'EV' else 2.0
+        dod_pct = self.ev_dod_input.value() if vehicle_type == 'EV' else 100.0
+
+        
+        # Formula 1: Constant Speed Battery Current (A) = (Zero Gradient Max Speed Power (W)) / Battery Voltage
+        calculated_battery_current = motor_input_max / battery_voltage 
+        
+        # Formula 2: True usable Battery Capacity Wh = (Vehicle Range * Zero Gradient Max Speed Power) / (ContSpeed * (DoD% / 100))
+        
+        calculated_true_capacity_wh = (vehicle_range_km * motor_input_max) / (max_speed * (dod_pct / 100.0))
+    
+        
+        # Formula 3: True usable Battery Ah = True Capacity Wh / Battery voltage
+        calculated_true_capacity_ah = calculated_true_capacity_wh / battery_voltage 
+        
+        # Formula 4: Tentative battery Ah for given Discharge Hr (with Peukert correction)
+        # Tentative_Ah = (True_Ah * ((Battery_Current * discharge_hr)^(peukert_coeff - 1)))^(1/peukert_coeff)
+        calculated_tentative_ah = (calculated_true_capacity_ah * ((calculated_battery_current * discharge_hr) ** (peukert_coeff - 1))) ** (1/peukert_coeff)
+    
+        
+        # Formula 5: Tentative battery Capacity Wh = Battery_voltage * Tentative_Ah
+        calculated_tentative_wh = battery_voltage * calculated_tentative_ah
+        
+        # Formula 6: Battery Weight = Tentative_Wh * weight_per_wh
+        calculated_battery_weight = calculated_tentative_wh * weight_per_wh
+        
+        # Store battery analysis results
+        ev_battery_analysis = {
+            'requirements': battery_requirements,
+            'chemistry': battery_chemistry,
+            'battery_voltage': battery_voltage,
+            'weight_per_wh': weight_per_wh,
+            'peukert_coeff': peukert_coeff,
+            'discharge_hr': discharge_hr,
+            'dod_pct': dod_pct,
+            'battery_current': calculated_battery_current,
+            'nominal_capacity_wh': calculated_true_capacity_wh,
+            'nominal_capacity_ah': calculated_true_capacity_ah,
+            'peukert_adjusted_ah': calculated_tentative_ah,
+            'peukert_adjusted_wh': calculated_tentative_wh,
+            'calculated_battery_weight': calculated_battery_weight
+        }
+        
+        # --- BATTERY CAPACITY WITH DRIVE PATTERN ---
+        # Define drive pattern slabs (speed, drive%, gradient, distance%)
+        slabs = [
+            {'name': 'Slab-1 Max Speed', 'speed': max_speed, 'drive_pct': 35, 'gradient': 0.0},
+            {'name': 'Slab-2 Speed', 'speed': max_speed * 0.7, 'drive_pct': 40, 'gradient': 0.0},  # 35 km/h
+            {'name': 'Slab-3 Speed', 'speed': max_speed * 0.5, 'drive_pct': 20, 'gradient': 0.0},  # 25 km/h
+            {'name': 'Slab-4 Speed', 'speed': slope_speed, 'drive_pct': 5, 'gradient': gradeability},
+        ]
+        
+        # Use vehicle_range_km (already defined above) for slab calculations
+        vehicle_range_total = vehicle_range_km
+        
+        slab_data = []
+        total_usable_ah = 0
+        
+        for slab in slabs:
+            speed_kmh = slab['speed']
+            speed_ms = speed_kmh / 3.6
+            gradient_deg = slab['gradient']
+            drive_pct = slab['drive_pct']
+            distance_km = (vehicle_range_total * drive_pct)/100
             
-            final_battery_capacity_ah = sum(slab['final_ah'] for slab in slab_data)
+            # Calculate forces
+            F_drag_slab = cd * air_density * frontal_area * speed_kmh * speed_kmh * 0.03858025308642
+            F_roll_slab = cr * calculated_gvw * 9.81
+            F_climb_slab =  calculated_gvw * 9.81 * math.sin(gradient_deg*0.01745329)
+            
+            # Power calculations
+            power_wheel_slab = (F_drag_slab + F_roll_slab + F_climb_slab)
+            motor_output_slab = power_wheel_slab * (speed_kmh * 0.2777778) / gear_efficiency
+            motor_input_slab = power_wheel_slab * (speed_kmh * 0.2777778) / (gear_efficiency * motor_efficiency)
+            
+            # Battery current
+            battery_current_slab = motor_input_slab / battery_voltage 
+    
+            # Energy and capacity
+            usable_energy_wh = (motor_input_slab * distance_km) / (speed_kmh * (dod_pct/100))
+            true_usable_ah = usable_energy_wh / battery_voltage
+            final_ah = (true_usable_ah * ((battery_current * discharge_hr) ** (peukert_coeff - 1))) ** (1/peukert_coeff)# Add 5% margin
+            
+            total_usable_ah += true_usable_ah
+            
+            slab_data.append({
+                'name': slab['name'],
+                'speed': speed_kmh,
+                'drive_pct': drive_pct,
+                'gradient': gradient_deg,
+                'distance': distance_km,
+                'F_climb': F_climb_slab,
+                'F_drag': F_drag_slab,
+                'F_roll': F_roll_slab,
+                'motor_input': motor_input_slab,
+                'motor_output': motor_output_slab,
+                'battery_current': battery_current_slab,
+                'usable_energy': usable_energy_wh,
+                'true_usable_ah': true_usable_ah,
+                'final_ah': final_ah
+            })
+        
+        final_battery_capacity_ah = sum(slab['final_ah'] for slab in slab_data)
         
         # Build HTML output - Only for EV
         if vehicle_type == 'EV':
@@ -1000,62 +938,63 @@ class EVSimulationApp(QMainWindow):
         else:
             # UGV - Comprehensive output calculations
             # Get UGV-specific parameters
+            num_motors = self.ugv_num_powered_wheels_input.value()
             num_wheels = self.ugv_num_wheels_input.value()
-            num_powered_wheels = self.ugv_num_powered_wheels_input.value()
             track_width = self.ugv_track_width_input.value()
             skid_coefficient = self.ugv_skid_coefficient_input.value()
             spin_angular_rad = self.ugv_spin_angular_rad_input.value()
             spin_angular_deg = self.ugv_spin_angular_deg_input.value()
             
             # --- PER MOTOR OUTPUT POWER ---
-            per_motor_output_max = ((F_drag_max + F_roll) * (max_speed * 0.2777778))/(gear_efficiency * num_powered_wheels)
-            per_motor_output_slope = ((F_drag_slope + F_roll + F_climb) * (slope_speed * 0.2777778))/(gear_efficiency * num_powered_wheels)
-            per_motor_output_accel = (term1 + term2 + term3)/gear_efficiency
+            per_motor_output_max = motor_output_max / num_motors if num_motors > 0 else 0
+            per_motor_output_slope = motor_output_slope / num_motors if num_motors > 0 else 0
+            per_motor_output_accel = motor_output_accel / num_motors if num_motors > 0 else 0
             
             # --- PER MOTOR TORQUE AND RPM ---
-            per_motor_torque_max = (per_motor_output_max * 60)/(2 * math.pi * rpm_motor_max)
-            per_motor_torque_accel = (per_motor_output_accel * 60)/(2 * math.pi * rpm_motor_accel)
-            per_motor_torque_slope = (per_motor_output_slope * 60)/(2 * math.pi * rpm_motor_slope)
+            per_motor_torque_max = torque_motor_max / num_motors if num_motors > 0 else 0
+            per_motor_torque_accel = torque_motor_accel / num_motors if num_motors > 0 else 0
+            per_motor_torque_slope = torque_motor_slope / num_motors if num_motors > 0 else 0
             
             # --- POWER OUTPUT PER WHEELS (Powered wheels only) ---
-            per_wheel_power_max = per_motor_output_max * gear_efficiency
-            per_wheel_power_accel = per_motor_output_accel * gear_efficiency
-            per_wheel_power_slope = per_motor_output_slope * gear_efficiency
+            per_wheel_power_max = wheel_power_max / num_motors if num_motors > 0 else 0
+            per_wheel_power_accel = wheel_power_accel / num_motors if num_motors > 0 else 0
+            per_wheel_power_slope = wheel_power_slope / num_motors if num_motors > 0 else 0
+            
             # --- TORQUE AND RPM PER WHEEL (Powered wheels only) ---
-            per_wheel_torque_max = (per_wheel_power_max * 60)/(2 * math.pi * rpm_wheel_max)
-            per_wheel_torque_accel = (per_wheel_power_accel * 60)/(2 * math.pi * rpm_wheel_accel)
-            per_wheel_torque_slope = (per_wheel_power_slope * 60)/(2 * math.pi * rpm_wheel_slope)
+            per_wheel_torque_max = torque_wheel_max / num_motors if num_motors > 0 else 0
+            per_wheel_torque_accel = torque_wheel_accel / num_motors if num_motors > 0 else 0
+            per_wheel_torque_slope = torque_wheel_slope / num_motors if num_motors > 0 else 0
             
             # --- SKID PARAMETERS AND POWER ESTIMATION ---
             # Total Skid Friction Force
-            total_skid_friction = calculated_gvw * 9.81 * skid_coefficient
+            total_skid_friction = vehicle_mass * 9.81 * skid_coefficient
             
             # Per wheel Skid Friction Force
-            per_wheel_skid_friction = total_skid_friction / num_powered_wheels 
+            per_wheel_skid_friction = total_skid_friction / num_motors if num_motors > 0 else 0
             
             # Wheel linear speed during turning
-            wheel_linear_speed_turn = spin_angular_rad * track_width / 2
+            wheel_linear_speed_turn = spin_angular_rad * (track_width / 2)
             
             # Power for each motor during turn
-            power_per_motor_turn = (skid_coefficient * calculated_gvw * 9.81 * spin_angular_rad * track_width)/4
+            power_per_motor_turn = per_wheel_skid_friction * wheel_linear_speed_turn
             
             # Total power for all motors
-            total_power_turn = (skid_coefficient * calculated_gvw * 9.81 * spin_angular_rad * track_width)/2
+            total_power_turn = power_per_motor_turn * num_motors
             
             # Wheel RPM during turn
-            wheel_rpm_turn = spin_angular_rad * 9.549297
+            wheel_rpm_turn = (wheel_linear_speed_turn * 60) / (2 * math.pi * wheel_radius) if wheel_radius > 0 else 0
             
             # Vehicle rotational degree per second
-            vehicle_rot_deg_per_sec = spin_angular_rad * 57.2958
+            vehicle_rot_deg_per_sec = spin_angular_deg
             
             # Total Wheel Torque
-            total_wheel_torque = total_skid_friction * wheel_radius
+            total_wheel_torque = per_wheel_skid_friction * wheel_radius * num_motors
             
             # Total Motor Wheel Torque (accounting for gear efficiency)
-            total_motor_wheel_torque = total_wheel_torque / gear_ratio 
+            total_motor_wheel_torque = total_wheel_torque / gear_ratio if gear_ratio > 0 else 0
             
             # Per Motor Wheel Torque
-            per_motor_wheel_torque = total_motor_wheel_torque / num_powered_wheels 
+            per_motor_wheel_torque = total_motor_wheel_torque / num_motors if num_motors > 0 else 0
             
             html = f"""
             <style>
@@ -1073,34 +1012,6 @@ class EVSimulationApp(QMainWindow):
             </style>
             
             <h3>UGV Computed Output Values</h3>
-            
-            <div class='category'>Force Calculations & Acceleration Analysis</div>
-            <table class='layout'>
-                <tr>
-                    <td width='50%'>
-                        <h4>Force Calculations</h4>
-                        <table class='data'>
-                            <tr><th>Force Type</th><th class='value'>Value (N)</th></tr>
-                            <tr><td>F<sub>drag-const</sub></td><td class='value'>{F_drag_max:.2f}</td></tr>
-                            <tr><td>F<sub>drag-slope</sub></td><td class='value'>{F_drag_slope:.2f}</td></tr>
-                            <tr><td>F<sub>roll</sub></td><td class='value'>{F_roll:.2f}</td></tr>
-                            <tr><td>F<sub>climb</sub></td><td class='value'>{F_climb:.2f}</td></tr>
-                        </table>
-                    </td>
-                    <td width='50%'>
-                        <h4>Vehicle Acceleration Power</h4>
-                        <table class='data'>
-                            <tr><th>Parameter</th><th class='value'>Value</th></tr>
-                            <tr><td>Vehicle Speed for Motor Base Speed RPM (m/s)</td><td class='value'>{vehicle_speed_motor_base:.3f}</td></tr>
-                            <tr><td>Vehicle End of Acc Speed (m/s)</td><td class='value'>{Vehicle_End_Acc_Speed:.3f}</td></tr>
-                            <tr><td>Term1</td><td class='value'>{term1:.0f}</td></tr>
-                            <tr><td>Term2</td><td class='value'>{term2:.0f}</td></tr>
-                            <tr><td>Term3</td><td class='value'>{term3:.0f}</td></tr>
-                            <tr><td><b>Required Power for Acceleration</b></td><td class='value'><b>{req_power_accel:.0f}</b></td></tr>
-                        </table>
-                    </td>
-                </tr>
-            </table>
             
             <div class='category'>Motor Performance</div>
             <table class='layout'>
@@ -1168,193 +1079,6 @@ class EVSimulationApp(QMainWindow):
             """
             self.output_text.setHtml(html)
             self.statusBar().showMessage('UGV Output values computed successfully')
-    
-    def generate_graph_simulation_data(self):
-        """Generate time-series graph simulation data using current EV/UGV parameters"""
-        import math
-        import numpy as np
-        
-        # Get current vehicle type
-        vehicle_type = self.vehicle_type_combo.currentText()
-        
-        # Get simulation parameters
-        duration = self.duration_input.value()
-        target_speed_kmh = self.speed_input.value()
-        gradient_deg = self.gradient_input.value()
-        mode = self.mode_combo.currentText()
-        
-        # Get vehicle parameters based on type
-        if vehicle_type == 'EV':
-            wheel_radius = self.ev_wheel_radius_input.value()
-            cd = self.ev_cd_input.value()
-            cr = self.ev_cr_input.value()
-            frontal_area = self.ev_frontal_area_input.value()
-            air_density = self.ev_air_density_input.value()
-            gear_ratio = self.ev_gear_ratio_input.value()
-            gear_efficiency = self.ev_gear_efficiency_input.value() / 100.0
-            motor_efficiency = self.ev_motor_efficiency_input.value() / 100.0
-            motor_base_rpm = self.ev_motor_base_rpm_input.value()
-            gvw = self.ev_gvw_input.value()
-            num_motors = 1  # EV has 1 motor
-        else:  # UGV
-            wheel_radius = self.ugv_wheel_radius_input.value()
-            cd = self.ugv_cd_input.value()
-            cr = self.ugv_cr_input.value()
-            frontal_area = self.ugv_frontal_area_input.value()
-            air_density = self.ugv_air_density_input.value()
-            gear_ratio = self.ugv_gear_ratio_input.value()
-            gear_efficiency = self.ugv_gear_efficiency_input.value() / 100.0
-            motor_efficiency = self.ugv_motor_efficiency_input.value() / 100.0
-            motor_base_rpm = self.ugv_motor_base_rpm_input.value()
-            gvw = self.ugv_gvw_input.value()
-            num_motors = self.ugv_num_powered_wheels_input.value()
-        
-        # Mode multiplier (Eco = 0.8, Boost = 1.2)
-        mode_multiplier = 1.2 if mode == 'boost' else 0.8
-        
-        # Generate time steps (every 0.5 seconds)
-        time_steps = np.arange(0, duration + 0.5, 0.5)
-        
-        # Prepare data storage
-        data = []
-        
-        for t in time_steps:
-            # Calculate current speed (linear acceleration to target speed)
-            if t < duration / 2:
-                current_speed_kmh = (target_speed_kmh * t) / (duration / 2)
-            else:
-                current_speed_kmh = target_speed_kmh
-            
-            current_speed_ms = current_speed_kmh / 3.6
-            
-            # Calculate Motor Speed (RPM)
-            motor_speed_rpm = (current_speed_kmh * gear_ratio) / (2 * math.pi * wheel_radius * 0.001 * 60)
-            if motor_speed_rpm == 0:
-                motor_speed_rpm = motor_base_rpm
-            
-            # Calculate forces
-            F_drag = 0.5 * cd * air_density * frontal_area * current_speed_ms * current_speed_ms
-            F_roll = cr * gvw * 9.81
-            F_climb = gvw * 9.81 * math.sin(gradient_deg * math.pi / 180)
-            F_load = F_drag + F_roll + F_climb
-            
-            # Calculate tractive force (motor output force at wheels)
-            # For simplicity, assume tractive force equals load force during steady state
-            # During acceleration, add inertial force
-            if t < duration / 2:
-                # Acceleration phase
-                acceleration = (target_speed_kmh / 3.6) / (duration / 2)
-                F_inertia = gvw * acceleration
-                F_tractive = F_load + F_inertia
-            else:
-                # Constant speed phase
-                F_tractive = F_load
-                acceleration = 0
-            
-            # Net force
-            F_net = F_tractive - F_load
-            
-            # Calculate motor power and torque
-            # Power at wheels = Force * Velocity
-            power_at_wheels = F_tractive * current_speed_ms
-            
-            # Motor output power (accounting for gear efficiency)
-            motor_output_power = power_at_wheels / gear_efficiency if gear_efficiency > 0 else 0
-            
-            # Motor input power (accounting for motor efficiency)
-            motor_input_power = motor_output_power / motor_efficiency if motor_efficiency > 0 else 0
-            
-            # Apply mode multiplier
-            motor_input_power *= mode_multiplier
-            motor_output_power *= mode_multiplier
-            
-            # Total motor torque (Nm) = (Power * 60) / (2 * π * RPM)
-            if motor_speed_rpm > 0:
-                total_motor_torque = (motor_output_power * 60) / (2 * math.pi * motor_speed_rpm)
-            else:
-                total_motor_torque = 0
-            
-            # Per motor values
-            per_motor_torque = total_motor_torque / num_motors if num_motors > 0 else total_motor_torque
-            per_motor_power = motor_input_power / num_motors if num_motors > 0 else motor_input_power
-            
-            # Store data
-            data.append({
-                'Time': round(t, 1),
-                'Vehicle Speed (m/s)': round(current_speed_ms, 3),
-                'Vehicle Speed (Kmph)': round(current_speed_kmh, 2),
-                'Motor Speed (RPM)': round(motor_speed_rpm, 1),
-                'Gradient (Degree)': gradient_deg,
-                'Mode': f'{mode.capitalize()}-{mode_multiplier}',
-                'Total Motor Torque (Nm)': round(total_motor_torque, 2),
-                'Total Number of Power Wheel Motors': num_motors,
-                'PerMotor Torque (Nm)': round(per_motor_torque, 2),
-                'PerMotor Power (Watts)': round(per_motor_power, 1),
-                'Motoring Tractive Force F_Tractive (N)': round(F_tractive, 2),
-                'Froll (N)': round(F_roll, 2),
-                'Fdrag (N)': round(F_drag, 2),
-                'Fclimb (N)': round(F_climb, 2),
-                'F_Load Resistance (N)': round(F_load, 2),
-                'Net Force F_Net (N)': round(F_net, 2),
-                'Vehicle Acceleration (m/s)': round(acceleration, 3) if t < duration / 2 else 0
-            })
-        
-        # Store data for export
-        self.graph_simulation_data = data
-        
-        # Populate table
-        self.populate_graph_table(data)
-        
-        self.statusBar().showMessage(f'Generated {len(data)} data points for {vehicle_type} graph simulation')
-    
-    def populate_graph_table(self, data):
-        """Populate the graph data table with calculated values"""
-        if not data:
-            return
-        
-        # Set up table
-        headers = list(data[0].keys())
-        self.graph_data_table.setColumnCount(len(headers))
-        self.graph_data_table.setRowCount(len(data))
-        self.graph_data_table.setHorizontalHeaderLabels(headers)
-        
-        # Populate data
-        for row_idx, row_data in enumerate(data):
-            for col_idx, header in enumerate(headers):
-                value = row_data[header]
-                item = QTableWidgetItem(str(value))
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.graph_data_table.setItem(row_idx, col_idx, item)
-        
-        # Resize columns to content
-        self.graph_data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-    
-    def export_to_excel(self):
-        """Export graph simulation data to Excel"""
-        if not hasattr(self, 'graph_simulation_data') or not self.graph_simulation_data:
-            QMessageBox.warning(self, 'No Data', 'Please generate graph simulation data first!')
-            return
-        
-        # Ask user for file location
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            'Save Excel File',
-            'graph_simulation_data.xlsx',
-            'Excel Files (*.xlsx)'
-        )
-        
-        if not file_path:
-            return
-        
-        try:
-            # Convert to DataFrame and export
-            df = pd.DataFrame(self.graph_simulation_data)
-            df.to_excel(file_path, index=False, sheet_name='Graph Simulation')
-            
-            QMessageBox.information(self, 'Success', f'Data exported successfully to:\n{file_path}')
-            self.statusBar().showMessage(f'Exported data to {file_path}')
-        except Exception as e:
-            QMessageBox.critical(self, 'Export Error', f'Failed to export data:\n{str(e)}')
     
     def show_about(self):
         """Show about dialog"""
@@ -1922,8 +1646,6 @@ class EVSimulationApp(QMainWindow):
         self.ugv_kerb_weight_input.setRange(0.0, 5000.0)
         self.ugv_kerb_weight_input.setValue(150.0)
         self.ugv_kerb_weight_input.setSingleStep(5.0)
-        self.ugv_kerb_weight_input.setReadOnly(True)  # Calculated field
-        self.ugv_kerb_weight_input.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
         ugv_weight_layout.addWidget(self.ugv_kerb_weight_input, 0, 1)
         
         ugv_weight_layout.addWidget(QLabel('Passenger/Load Weight (kg):'), 1, 0)
@@ -1938,8 +1660,6 @@ class EVSimulationApp(QMainWindow):
         self.ugv_gvw_input.setRange(0.0, 6000.0)
         self.ugv_gvw_input.setValue(150.0)
         self.ugv_gvw_input.setSingleStep(5.0)
-        self.ugv_gvw_input.setReadOnly(True)  # Calculated field
-        self.ugv_gvw_input.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
         ugv_weight_layout.addWidget(self.ugv_gvw_input, 2, 1)
         
         ugv_weight_layout.addWidget(QLabel('Motor & Controller Weight (kg):'), 3, 0)
@@ -1979,11 +1699,6 @@ class EVSimulationApp(QMainWindow):
         
         ugv_weight_group.setLayout(ugv_weight_layout)
         ugv_main_layout.addWidget(ugv_weight_group)
-        
-        # Connect signals for auto-calculation of kerb_weight and gvw
-        self.ugv_battery_weight_input.valueChanged.connect(self.update_ugv_calculated_weights)
-        self.ugv_vehicle_weight_input.valueChanged.connect(self.update_ugv_calculated_weights)
-        self.ugv_passenger_weight_input.valueChanged.connect(self.update_ugv_calculated_weights)
         
         # Battery Parameters
         ugv_battery_group = QGroupBox('Battery Parameters')
@@ -2346,54 +2061,6 @@ class EVSimulationApp(QMainWindow):
         self.energy_canvas = PlotCanvas(self, width=8, height=6)
         self.tab_widget.addTab(self.energy_canvas, '🔋 Energy')
         
-        # Data Table tab for graph simulation parameters
-        self.graph_sim_tab = QWidget()
-        graph_sim_layout = QVBoxLayout(self.graph_sim_tab)
-        
-        # Title and controls
-        header_layout = QHBoxLayout()
-        table_title = QLabel('Graph Simulation Parameters')
-        table_title.setFont(QFont('Arial', 12, QFont.Weight.Bold))
-        header_layout.addWidget(table_title)
-        header_layout.addStretch()
-        
-        # Generate button
-        self.generate_graph_btn = QPushButton('🔄 Generate Graph Data')
-        self.generate_graph_btn.setStyleSheet('background-color: #2196F3; color: white; font-weight: bold; padding: 8px; border-radius: 4px;')
-        self.generate_graph_btn.clicked.connect(self.generate_graph_simulation_data)
-        header_layout.addWidget(self.generate_graph_btn)
-        
-        # Export button
-        self.export_excel_btn = QPushButton('📊 Export to Excel')
-        self.export_excel_btn.setStyleSheet('background-color: #4CAF50; color: white; font-weight: bold; padding: 8px; border-radius: 4px;')
-        self.export_excel_btn.clicked.connect(self.export_to_excel)
-        header_layout.addWidget(self.export_excel_btn)
-        
-        graph_sim_layout.addLayout(header_layout)
-        
-        # Table widget
-        self.graph_data_table = QTableWidget()
-        self.graph_data_table.setAlternatingRowColors(True)
-        self.graph_data_table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #d0d0d0;
-                background-color: white;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
-            QHeaderView::section {
-                background-color: #2196F3;
-                color: white;
-                padding: 6px;
-                font-weight: bold;
-                border: 1px solid #1976D2;
-            }
-        """)
-        graph_sim_layout.addWidget(self.graph_data_table)
-        
-        self.tab_widget.addTab(self.graph_sim_tab, '📋 Data Table')
-        
         layout.addWidget(self.tab_widget)
         
         return panel
@@ -2668,19 +2335,6 @@ class EVSimulationApp(QMainWindow):
         gvw = kerb_weight + passenger_weight
         self.ev_gvw_input.setValue(gvw)
     
-    def update_ugv_calculated_weights(self):
-        """Auto-update UGV calculated weight fields based on formulas"""
-        # Formula: kerb_weight = battery_weight_input + vehicle_weight
-        battery_weight = self.ugv_battery_weight_input.value()
-        vehicle_weight = self.ugv_vehicle_weight_input.value()
-        kerb_weight = battery_weight + vehicle_weight
-        self.ugv_kerb_weight_input.setValue(kerb_weight)
-        
-        # Formula: gvw = kerb_weight + passenger_weight
-        passenger_weight = self.ugv_passenger_weight_input.value()
-        gvw = kerb_weight + passenger_weight
-        self.ugv_gvw_input.setValue(gvw)
-    
     def reset_ev_defaults(self):
         """Reset EV parameters to default values from EV_DEFAULTS constants"""
         # Physical Parameters
@@ -2733,64 +2387,64 @@ class EVSimulationApp(QMainWindow):
         self.statusBar().showMessage('EV parameters reset to defaults')
     
     def reset_ugv_defaults(self):
-        """Reset UGV parameters to default values using UGV_DEFAULTS dictionary"""
+        """Reset UGV parameters to default values"""
         # Physical Parameters
-        self.ugv_cd_input.setValue(UGV_DEFAULTS['cd'])
-        self.ugv_cr_input.setValue(UGV_DEFAULTS['cr'])
-        self.ugv_wheel_radius_input.setValue(UGV_DEFAULTS['wheel_radius'])
-        self.ugv_air_density_input.setValue(UGV_DEFAULTS['air_density'])
-        self.ugv_frontal_area_input.setValue(UGV_DEFAULTS['frontal_area'])
+        self.ugv_cd_input.setValue(0.8)
+        self.ugv_cr_input.setValue(0.02)
+        self.ugv_wheel_radius_input.setValue(0.2795)
+        self.ugv_air_density_input.setValue(1.164)
+        self.ugv_frontal_area_input.setValue(0.5)
         
         # Drivetrain Parameters
-        self.ugv_gear_ratio_input.setValue(UGV_DEFAULTS['gear_ratio'])
-        self.ugv_gear_efficiency_input.setValue(UGV_DEFAULTS['gear_efficiency'])
-        self.ugv_motor_efficiency_input.setValue(UGV_DEFAULTS['motor_efficiency'])
-        self.ugv_motor_base_rpm_input.setValue(UGV_DEFAULTS['motor_base_rpm'])
+        self.ugv_gear_ratio_input.setValue(5.221)
+        self.ugv_gear_efficiency_input.setValue(95.0)
+        self.ugv_motor_efficiency_input.setValue(85.0)
+        self.ugv_motor_base_rpm_input.setValue(500)
         
         # Weight Parameters
-        self.ugv_kerb_weight_input.setValue(UGV_DEFAULTS['kerb_weight'])
-        self.ugv_passenger_weight_input.setValue(UGV_DEFAULTS['passenger_weight'])
-        self.ugv_gvw_input.setValue(UGV_DEFAULTS['gvw'])
-        self.ugv_motor_controller_weight_input.setValue(UGV_DEFAULTS['motor_controller_weight'])
-        self.ugv_battery_weight_input.setValue(UGV_DEFAULTS['battery_weight_input'])
-        self.ugv_vehicle_weight_input.setValue(UGV_DEFAULTS['vehicle_weight'])
-        self.ugv_other_weights_input.setValue(UGV_DEFAULTS['other_weights'])
-        self.ugv_generator_weight_input.setValue(UGV_DEFAULTS['generator_weight'])
+        self.ugv_kerb_weight_input.setValue(150.0)
+        self.ugv_passenger_weight_input.setValue(0.0)
+        self.ugv_gvw_input.setValue(150.0)
+        self.ugv_motor_controller_weight_input.setValue(0.0)
+        self.ugv_battery_weight_input.setValue(0.0)
+        self.ugv_vehicle_weight_input.setValue(150.0)
+        self.ugv_other_weights_input.setValue(0.0)
+        self.ugv_generator_weight_input.setValue(0.0)
         
         # Battery Parameters
-        self.ugv_battery_req_input.setCurrentText(UGV_DEFAULTS['battery_requirements'])
-        self.ugv_battery_chem_input.setCurrentText(UGV_DEFAULTS['battery_chemistry'])
-        self.ugv_battery_voltage_input.setValue(UGV_DEFAULTS['battery_voltage'])
-        self.ugv_weight_per_wh_input.setValue(UGV_DEFAULTS['weight_per_wh'])
-        self.ugv_peukert_input.setValue(UGV_DEFAULTS['peukert_coeff'])
-        self.ugv_discharge_hr_input.setValue(UGV_DEFAULTS['discharge_hr'])
-        self.ugv_dod_input.setValue(UGV_DEFAULTS['dod_pct'])
-        self.ugv_battery_current_input.setValue(UGV_DEFAULTS['battery_current'])
-        self.ugv_true_capacity_wh_input.setValue(UGV_DEFAULTS['true_capacity_wh'])
-        self.ugv_true_capacity_ah_input.setValue(UGV_DEFAULTS['true_capacity_ah'])
-        self.ugv_tentative_ah_input.setValue(UGV_DEFAULTS['tentative_ah'])
-        self.ugv_tentative_wh_input.setValue(UGV_DEFAULTS['tentative_wh'])
-        self.ugv_battery_weight_total_input.setValue(UGV_DEFAULTS['battery_weight_total'])
+        self.ugv_battery_req_input.setCurrentText('Lithium')
+        self.ugv_battery_chem_input.setCurrentText('NCM')
+        self.ugv_battery_voltage_input.setValue(24.0)
+        self.ugv_weight_per_wh_input.setValue(0.0)
+        self.ugv_peukert_input.setValue(1.05)
+        self.ugv_discharge_hr_input.setValue(2.0)
+        self.ugv_dod_input.setValue(100.0)
+        self.ugv_battery_current_input.setValue(53.0)
+        self.ugv_true_capacity_wh_input.setValue(1789.0)
+        self.ugv_true_capacity_ah_input.setValue(75.0)
+        self.ugv_tentative_ah_input.setValue(76.0)
+        self.ugv_tentative_wh_input.setValue(1820.0)
+        self.ugv_battery_weight_total_input.setValue(12.0)
         
         # Performance Parameters
-        self.ugv_rotary_inertia_input.setValue(UGV_DEFAULTS['rotary_inertia'])
-        self.ugv_max_speed_input.setValue(UGV_DEFAULTS['max_speed'])
-        self.ugv_slope_speed_input.setValue(UGV_DEFAULTS['slope_speed'])
-        self.ugv_gradeability_input.setValue(UGV_DEFAULTS['gradeability'])
-        self.ugv_accel_end_speed_input.setValue(UGV_DEFAULTS['accel_end_speed'])
-        self.ugv_accel_period_input.setValue(UGV_DEFAULTS['accel_period'])
-        self.ugv_vehicle_range_input.setValue(UGV_DEFAULTS['vehicle_range'])
+        self.ugv_rotary_inertia_input.setValue(1.06)
+        self.ugv_max_speed_input.setValue(50.0)
+        self.ugv_slope_speed_input.setValue(5.0)
+        self.ugv_gradeability_input.setValue(30.0)
+        self.ugv_accel_end_speed_input.setValue(50.0)
+        self.ugv_accel_period_input.setValue(5.0)
+        self.ugv_vehicle_range_input.setValue(70.0)
         
         # UGV-Specific Parameters
-        self.ugv_step_height_input.setValue(UGV_DEFAULTS['step_height'])
-        self.ugv_num_wheels_input.setValue(UGV_DEFAULTS['num_wheels'])
-        self.ugv_num_powered_wheels_input.setValue(UGV_DEFAULTS['num_powered_wheels'])
-        self.ugv_load_per_wheel_input.setValue(UGV_DEFAULTS['load_per_wheel'])
-        self.ugv_torque_climb_input.setValue(UGV_DEFAULTS['torque_climb'])
-        self.ugv_track_width_input.setValue(UGV_DEFAULTS['track_width'])
-        self.ugv_skid_coefficient_input.setValue(UGV_DEFAULTS['skid_coefficient'])
-        self.ugv_spin_angular_rad_input.setValue(UGV_DEFAULTS['spin_angular_rad'])
-        self.ugv_spin_angular_deg_input.setValue(UGV_DEFAULTS['spin_angular_deg'])
+        self.ugv_step_height_input.setValue(0.1)
+        self.ugv_num_wheels_input.setValue(4)
+        self.ugv_num_powered_wheels_input.setValue(2)
+        self.ugv_load_per_wheel_input.setValue(37.5)
+        self.ugv_torque_climb_input.setValue(36.75)
+        self.ugv_track_width_input.setValue(0.6)
+        self.ugv_skid_coefficient_input.setValue(0.7)
+        self.ugv_spin_angular_rad_input.setValue(0.5)
+        self.ugv_spin_angular_deg_input.setValue(28.6479)
         
         self.statusBar().showMessage('UGV parameters reset to defaults')
     
