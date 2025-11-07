@@ -1,6 +1,139 @@
 """
-EV Power Train Simulation Tool - Main Application
-Desktop GUI application for simulating EV performance
+================================================================================
+EV POWER TRAIN SIMULATION TOOL
+================================================================================
+
+Description:
+    Comprehensive desktop application for simulating and analyzing Electric 
+    Vehicle (EV) and Unmanned Ground Vehicle (UGV) power train performance.
+    Features real-time physics simulation with iterative Euler integration,
+    multi-graph visualization, and detailed output analysis.
+
+Version:        9.0 - Single Source of Truth Architecture
+Last Updated:   November 7, 2025
+Author:         [Your Name/Organization]
+License:        [Your License]
+
+================================================================================
+FEATURES
+================================================================================
+
+✓ Dual Vehicle Support: EV and UGV modes with specialized parameters
+✓ Real-Time Simulation: 120-second physics with 241 data points
+✓ Multi-Graph Visualization: 4 interactive tabs (Speed, Power, Forces, Motor)
+✓ Data Table: Complete 17-column dataset with all simulation values
+✓ Excel Export: Single-sheet export with all simulation data
+✓ Output Analysis: Force calculations, battery sizing, range estimation
+✓ Parameter Management: Default values, reset functionality, terrain scenarios
+
+================================================================================
+TECHNICAL SPECIFICATIONS
+================================================================================
+
+Physics Engine:
+    - Integration Method: Iterative Euler integration
+    - Time Step: 0.5 seconds
+    - Duration: 120 seconds
+    - Data Points: 241 rows (including t=0)
+    - Initial Conditions: v₀ = 0 m/s (start from rest)
+
+Graph Tabs:
+    1. Speed Tab (Orange): Vehicle speed vs time
+    2. Power Tab (Orange): Per-motor power consumption
+    3. Forces Tab (Multi-color): 4-force analysis
+       - Tractive Force (Orange)
+       - Rolling Resistance (Blue)
+       - Drag Force (Yellow)
+       - Load Resistance (Gray)
+    4. Motor Tab (Blue): Dual subplots
+       - Motor Speed (RPM)
+       - Total Motor Torque (Nm)
+
+Technology Stack:
+    - Python 3.8+
+    - PyQt6 (GUI framework)
+    - Matplotlib (Graph plotting)
+    - NumPy (Numerical computations)
+    - Pandas (Data handling)
+    - OpenPyXL (Excel export)
+
+================================================================================
+VERSION HISTORY
+================================================================================
+
+Version 9.0 (Nov 7, 2025) - Major Architectural Simplification
+    ✓ Removed simulation_engine.py - Single source of truth
+    ✓ Eliminated background threading - Fast execution (<0.1s)
+    ✓ Simplified export - Single Excel sheet
+    ✓ Unified simulation workflow - Direct table generation
+    ✓ Code reduction - Removed ~497 lines
+
+Version 8.0 (Nov 7, 2025) - Motor Tab Update
+    ✓ Updated Motor tab with dual subplots
+    ✓ All 4 graph tabs now plot from Data Table
+
+Version 7.0 (Nov 7, 2025) - Forces Tab Update
+    ✓ Updated Forces tab with 4 color-coded lines
+    ✓ Multi-line force visualization
+
+Version 6.0 (Nov 7, 2025) - Power Tab Update
+    ✓ Updated Power tab to plot from Data Table
+    ✓ Orange line styling with Watts units
+
+Version 5.0 (Nov 7, 2025) - Streamlined Interface
+    ✓ Removed Results Summary panel
+    ✓ Cleaner UI with more space
+
+================================================================================
+CREDITS & ACKNOWLEDGMENTS
+================================================================================
+
+Development Team:
+    - Lead Developer: [Your Name]
+    - Project Supervisor: [Supervisor Name]
+    - Organization: [Your Organization]
+
+Special Thanks:
+    - Physics calculations based on standard vehicle dynamics equations
+    - UI design inspired by modern engineering simulation tools
+    - PyQt6 and Matplotlib communities for excellent frameworks
+
+Contact:
+    - Email: [Your Email]
+    - GitHub: [Your GitHub]
+    - Documentation: See README.md and *.md files in project directory
+
+================================================================================
+USAGE
+================================================================================
+
+Quick Start:
+    1. Install dependencies: pip install PyQt6 matplotlib numpy pandas openpyxl
+    2. Run application: python main_app.py
+    3. Select vehicle type (EV or UGV)
+    4. Adjust parameters in left panel
+    5. Set gradient and mode
+    6. Click "▶ Run Simulation"
+    7. View results in graph tabs and data table
+    8. Export data with "💾 Export Results"
+
+Key Workflows:
+    - Design Optimization: Adjust parameters and compare results
+    - Performance Analysis: Test different gradients and modes
+    - Battery Sizing: Calculate power requirements
+    - Motor Selection: Verify torque and RPM specifications
+    - Education: Visualize physics concepts
+
+================================================================================
+LICENSE
+================================================================================
+
+[Insert your license text here - MIT, GPL, Proprietary, etc.]
+
+Copyright (c) 2025 [Your Name/Organization]
+All rights reserved.
+
+================================================================================
 """
 
 import sys
