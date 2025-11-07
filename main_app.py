@@ -33,8 +33,6 @@ matplotlib.rcParams['grid.color'] = 'gray'
 import pandas as pd
 import json
 
-from simulation_engine import EVSimulationEngine, VehicleParameters
-
 
 # ========== EV DEFAULT CONSTANTS ==========
 EV_DEFAULTS = {
@@ -153,35 +151,119 @@ UGV_DEFAULTS['load_per_wheel'] = UGV_DEFAULTS['gvw'] / UGV_DEFAULTS['num_wheels'
 UGV_DEFAULTS['torque_climb'] = UGV_DEFAULTS['step_height'] * 9.81 * UGV_DEFAULTS['load_per_wheel']  # Nm
 UGV_DEFAULTS['spin_angular_deg'] = UGV_DEFAULTS['spin_angular_rad'] * 57.2958  # rad/s to deg/s
 
-# Physical constants
-GRAVITY = 9.81  # m/s²
-DEG_TO_RAD = 0.01745329  # degrees to radians conversion
-KMH_TO_MS = 0.2777778    # km/h to m/s conversion
+# ========== GRAPH SIMULATION DEFAULT CONSTANTS ==========
+GRAPH_SIM_DEFAULTS = {
+    # Simulation Environment Parameters
+    'gradient_deg': 0.0,               # degrees - Road slope angle
+    'mode': 'boost',                   # 'boost' or 'eco' - Operating mode
 
+    # Initial Time and Speed Parameters
+    'init_time': 0.0,                  # s - Starting time
+    'init_vehicle_speed_ms': 0.0,      # m/s - Initial vehicle speed
+    'init_vehicle_speed_kmph': 0.0,    # km/h - Initial vehicle speed (display)
+    
+    # Initial Motor Parameters
+    'init_motor_speed_rpm': 0.0,     # RPM - Initial motor speed
+    'init_num_power_wheels': 2,                   # count - Number of powered wheels
+    'init_total_motor_torque': 74.0,   # Nm - Total torque from all motors
+    'init_per_motor_torque': 50.0,     # Nm - Torque per individual motor
+    'init_per_motor_power': 2000.0,    # W - Power per individual motor
+    
+    # Initial Force Parameters
+    'init_tractive_force': 500.0,      # N - Driving force at wheels
+    'init_froll': 30.69,               # N - Rolling resistance force
+    'init_fdrag': 0.0,                 # N - Aerodynamic drag force
+    'init_fclimb': 0.0,                # N - Climbing force (gradient)
+    'init_fload': 30.69,               # N - Total load resistance (Froll + Fdrag + Fclimb)
+    'init_fnet': 0.0,                  # N - Net force (Tractive - Load)
+    
+    # Initial Acceleration Parameter
+    'init_vehicle_accel': 0.0,         # m/s² - Vehicle acceleration
+    
+    # Simulation Control Parameters
+    'duration': 120.0,                  # s - Simulation duration (2m)
+}
 
-class SimulationThread(QThread):
-    """Thread for running simulation without blocking UI"""
-    finished = pyqtSignal(dict)
-    progress = pyqtSignal(int)
-    
-    def __init__(self, engine, duration, target_speed, gradient, mode):
-        super().__init__()
-        self.engine = engine
-        self.duration = duration
-        self.target_speed = target_speed
-        self.gradient = gradient
-        self.mode = mode
-    
-    def run(self):
-        """Run simulation in background"""
-        self.engine.run_simulation(
-            duration=self.duration,
-            target_speed_kmh=self.target_speed,
-            gradient_deg=self.gradient,
-            mode=self.mode
+# Calculated Graph Simulation Parameters (derived from base values and EV defaults)
+# Calculate init_vehicle_speed_kmph from init_vehicle_speed_ms
+GRAPH_SIM_DEFAULTS['init_vehicle_speed_kmph'] = GRAPH_SIM_DEFAULTS['init_vehicle_speed_ms'] * 3.6
+
+# Calculate init_motor_speed_rpm using formula: (speed_kmph * gear_ratio) / (2 * π * wheel_radius * 0.001 * 60)
+# Uses EV_DEFAULTS for gear_ratio and wheel_radius
+GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'] = (
+    GRAPH_SIM_DEFAULTS['init_vehicle_speed_kmph'] * EV_DEFAULTS['gear_ratio']
+) / (2 * 3.14159 * EV_DEFAULTS['wheel_radius'] * 0.001 * 60)
+
+# Calculate init_total_motor_torque based on mode and motor RPM
+# Formula: IF(mode=boost, IF(RPM<500, 37, (2000*60)/(2*π*RPM)), IF(RPM<500, 19, (1000*60)/(2*π*RPM))) * 2
+# When RPM < 500 (including 0), use constant values: 37 for boost, 19 for eco
+GRAPH_SIM_DEFAULTS['init_total_motor_torque'] = (
+    GRAPH_SIM_DEFAULTS['mode'] == 'boost' and (
+        GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'] < 500 and 37 or (
+            (2000 * 60) / (2 * 3.14159 * GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'])
         )
-        stats = self.engine.get_summary_stats()
-        self.finished.emit(stats)
+    ) or (
+        GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'] < 500 and 19 or (
+            (1000 * 60) / (2 * 3.14159 * GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'])
+        )
+    )
+) * 2
+
+# Calculate init_per_motor_torque: total torque divided by number of power wheels
+GRAPH_SIM_DEFAULTS['init_per_motor_torque'] = (
+    GRAPH_SIM_DEFAULTS['init_total_motor_torque'] / GRAPH_SIM_DEFAULTS['init_num_power_wheels']
+)
+
+# Calculate init_per_motor_power: (2π × RPM × torque) / 60
+GRAPH_SIM_DEFAULTS['init_per_motor_power'] = (
+    (2 * 3.14159 * GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'] * GRAPH_SIM_DEFAULTS['init_per_motor_torque']) / 60
+)
+
+# Calculate init_tractive_force: (total_torque × gear_efficiency × gear_ratio) / wheel_radius
+# Uses EV_DEFAULTS for gear_efficiency, gear_ratio, and wheel_radius
+GRAPH_SIM_DEFAULTS['init_tractive_force'] = (
+    (GRAPH_SIM_DEFAULTS['init_total_motor_torque'] * (EV_DEFAULTS['gear_efficiency'] / 100.0) * EV_DEFAULTS['gear_ratio']) 
+    / EV_DEFAULTS['wheel_radius']
+)
+
+# Calculate init_froll: rolling resistance force = cr × mass × g
+# Uses EV_DEFAULTS for cr and gvw
+GRAPH_SIM_DEFAULTS['init_froll'] = EV_DEFAULTS['cr'] * EV_DEFAULTS['gvw'] * 9.81
+
+# Calculate init_fdrag: aerodynamic drag force = cd × air_density × frontal_area × speed² × 0.03858025308642
+# Uses EV_DEFAULTS for cd, air_density, frontal_area
+GRAPH_SIM_DEFAULTS['init_fdrag'] = (
+    EV_DEFAULTS['cd'] * EV_DEFAULTS['air_density'] * EV_DEFAULTS['frontal_area'] * 
+    GRAPH_SIM_DEFAULTS['init_vehicle_speed_kmph'] * GRAPH_SIM_DEFAULTS['init_vehicle_speed_kmph'] * 0.03858025308642
+)
+
+# Calculate init_fclimb: climbing force = mass × g × sin(gradient_angle)
+# Uses EV_DEFAULTS for gvw
+import math
+GRAPH_SIM_DEFAULTS['init_fclimb'] = (
+    EV_DEFAULTS['gvw'] * 9.81 * math.sin(GRAPH_SIM_DEFAULTS['gradient_deg'] * 0.01745329)
+)
+
+# Calculate init_fload: total load resistance = froll + fdrag + fclimb
+GRAPH_SIM_DEFAULTS['init_fload'] = (
+    GRAPH_SIM_DEFAULTS['init_froll'] + GRAPH_SIM_DEFAULTS['init_fdrag'] + GRAPH_SIM_DEFAULTS['init_fclimb']
+)
+
+# Calculate init_fnet: net force = tractive force - load resistance
+GRAPH_SIM_DEFAULTS['init_fnet'] = (
+    GRAPH_SIM_DEFAULTS['init_tractive_force'] - GRAPH_SIM_DEFAULTS['init_fload']
+)
+
+# Calculate init_vehicle_accel: acceleration = net force / mass
+# Uses EV_DEFAULTS for gvw (kerb_weight + passenger_weight)
+GRAPH_SIM_DEFAULTS['init_vehicle_accel'] = (
+    GRAPH_SIM_DEFAULTS['init_fnet'] / EV_DEFAULTS['gvw']
+)
+
+# Physical constants
+GRAVITY = 9.81  # m/s² 
+DEG_TO_RAD = 0.01745329  # degrees to radians conversion
+KMH_TO_MS = 0.2777778   # km/h to m/s conversion
 
 
 class PlotCanvas(FigureCanvas):
@@ -199,51 +281,53 @@ class PlotCanvas(FigureCanvas):
         
         if plot_type == 'speed':
             ax = self.fig.add_subplot(111)
-            ax.plot(history['time'], history['speed_kmh'], 'b-', linewidth=2)
-            ax.set_xlabel('Time (s)', fontsize=10)
-            ax.set_ylabel('Speed (km/h)', fontsize=10)
-            ax.set_title('Vehicle Speed vs Time', fontsize=12, fontweight='bold')
-            ax.grid(True, alpha=0.3)
+            ax.plot(history['time'], history['speed_kmh'], color='orange', linewidth=2.5, label='Vehicle Speed (Kmph)')
+            ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+            ax.set_ylabel('Vehicle Speed (Kmph)', fontsize=10)
+            ax.set_title('Vehicle Speed (Kmph)', fontsize=12, fontweight='bold')
+            ax.legend(loc='lower right', fontsize=9)
+            ax.grid(True, alpha=0.3, linestyle='--')
         
         elif plot_type == 'power':
             ax = self.fig.add_subplot(111)
-            ax.plot(history['time'], history['motor_power'], 'r-', linewidth=2)
-            ax.set_xlabel('Time (s)', fontsize=10)
-            ax.set_ylabel('Power (kW)', fontsize=10)
-            ax.set_title('Motor Power vs Time', fontsize=12, fontweight='bold')
-            ax.grid(True, alpha=0.3)
+            ax.plot(history['time'], history['motor_power'], color='orange', linewidth=2.5, label='PerMotor Power (Watts)')
+            ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+            ax.set_ylabel('PerMotor Power (Watts)', fontsize=10)
+            ax.set_title('Power', fontsize=12, fontweight='bold')
+            ax.legend(loc='upper right', fontsize=9)
+            ax.grid(True, alpha=0.3, linestyle='--')
         
         elif plot_type == 'forces':
             ax = self.fig.add_subplot(111)
-            ax.plot(history['time'], history['tractive_force'], 'g-', 
-                   linewidth=2, label='Tractive Force')
-            ax.plot(history['time'], history['total_resistance'], 'r-', 
-                   linewidth=2, label='Total Resistance')
-            ax.plot(history['time'], history['drag_force'], 'b--', 
-                   linewidth=1.5, label='Drag Force')
-            ax.plot(history['time'], history['rolling_resistance'], 'y--', 
-                   linewidth=1.5, label='Rolling Resistance')
-            if max(history['climbing_force']) > 0:
-                ax.plot(history['time'], history['climbing_force'], 'm--', 
-                       linewidth=1.5, label='Climbing Force')
-            ax.set_xlabel('Time (s)', fontsize=10)
+            ax.plot(history['time'], history['tractive_force'], color='orange', 
+                   linewidth=2.5, label='Motoring Tractive Force F_Tractive (N)')
+            ax.plot(history['time'], history['rolling_resistance'], color='blue', 
+                   linewidth=2.5, label='Froll (N)')
+            ax.plot(history['time'], history['drag_force'], color='yellow', 
+                   linewidth=2.5, label='Fdrag (N)')
+            ax.plot(history['time'], history['total_resistance'], color='gray', 
+                   linewidth=2.5, label='F_Load Resistance (N)')
+            ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
             ax.set_ylabel('Force (N)', fontsize=10)
-            ax.set_title('Forces Analysis', fontsize=12, fontweight='bold')
-            ax.legend(fontsize=8)
-            ax.grid(True, alpha=0.3)
+            ax.set_title('Forces', fontsize=12, fontweight='bold')
+            ax.legend(fontsize=8, loc='upper right')
+            ax.grid(True, alpha=0.3, linestyle='--')
         
         elif plot_type == 'motor':
             ax1 = self.fig.add_subplot(211)
-            ax1.plot(history['time'], history['motor_rpm'], 'b-', linewidth=2)
-            ax1.set_ylabel('Motor RPM', fontsize=10)
-            ax1.set_title('Motor Performance', fontsize=12, fontweight='bold')
-            ax1.grid(True, alpha=0.3)
+            ax1.plot(history['time'], history['motor_rpm'], color='blue', linewidth=2.5, label='Motor Speed (RPM)')
+            ax1.set_ylabel('Motor Speed (RPM)', fontsize=10)
+            ax1.set_title('Motor Speed (RPM)', fontsize=12, fontweight='bold')
+            ax1.legend(loc='lower right', fontsize=8)
+            ax1.grid(True, alpha=0.3, linestyle='--')
             
             ax2 = self.fig.add_subplot(212)
-            ax2.plot(history['time'], history['motor_torque'], 'r-', linewidth=2)
-            ax2.set_xlabel('Time (s)', fontsize=10)
-            ax2.set_ylabel('Motor Torque (Nm)', fontsize=10)
-            ax2.grid(True, alpha=0.3)
+            ax2.plot(history['time'], history['motor_torque'], color='blue', linewidth=2.5, label='Total Motor Torque (Nm)')
+            ax2.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+            ax2.set_ylabel('Total Motor Torque (Nm)', fontsize=10)
+            ax2.set_title('Total Motor Torque (Nm)', fontsize=12, fontweight='bold')
+            ax2.legend(loc='upper right', fontsize=8)
+            ax2.grid(True, alpha=0.3, linestyle='--')
         
         elif plot_type == 'energy':
             ax = self.fig.add_subplot(111)
@@ -262,8 +346,6 @@ class EVSimulationApp(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.params = VehicleParameters()
-        self.engine = EVSimulationEngine(self.params)
         self.current_view = 'split'  # split, graphs_only, controls_only
         self.init_ui()
     
@@ -354,6 +436,9 @@ class EVSimulationApp(QMainWindow):
         # Initialize calculated weight fields
         self.update_ev_calculated_weights()
         self.update_ugv_calculated_weights()
+        
+        # Initialize graph simulation calculated fields
+        self.update_graph_sim_calculated_values()
 
         self.statusBar().showMessage('Ready')
     
@@ -364,10 +449,9 @@ class EVSimulationApp(QMainWindow):
             self.right_stack.setCurrentIndex(0)  # Output panel
             self.left_panel.setVisible(True)
             # Hide graph simulation controls
-            self.sim_group.setVisible(False)
+            self.graph_sim_params_group.setVisible(False)
             self.scenario_group.setVisible(False)
             self.btn_layout_widget.setVisible(False)
-            self.results_group.setVisible(False)
             # Show Vehicle Parameters for Output mode
             self.vehicle_group.setVisible(True)
             # Show comprehensive EV/UGV params and compute button
@@ -392,10 +476,9 @@ class EVSimulationApp(QMainWindow):
             self.right_stack.setCurrentIndex(1)  # Graphs panel
             self.left_panel.setVisible(True)
             # Show only basic simulation controls for running simulations
-            self.sim_group.setVisible(True)
+            self.graph_sim_params_group.setVisible(True)
             self.scenario_group.setVisible(True)
             self.btn_layout_widget.setVisible(True)
-            self.results_group.setVisible(True)
             # Hide Vehicle Parameters and comprehensive EV/UGV params
             self.vehicle_group.setVisible(False)
             self.ev_params_group.setVisible(False)
@@ -1170,113 +1253,129 @@ class EVSimulationApp(QMainWindow):
             self.statusBar().showMessage('UGV Output values computed successfully')
     
     def generate_graph_simulation_data(self):
-        """Generate time-series graph simulation data using current EV/UGV parameters"""
+        """
+        ⚠️ LOCKED CODE - VERIFIED ACCURATE ⚠️
+        Generate time-series graph simulation data using initial input parameters
+        
+        This method uses ITERATIVE EULER INTEGRATION for physics-accurate results.
+        DO NOT MODIFY the integration logic without verification.
+        
+        Key Implementation Details:
+        - Uses pre-calculated initial values for t=0
+        - Each subsequent step (t>0) uses values from PREVIOUS step
+        - Integration: v_new = v_old + a_old × dt
+        - Forces recalculated at each step based on current speed
+        - Produces accurate, physics-based results matching reference data
+        
+        Last Verified: November 7, 2025 at 12:38 PM IST
+        Status: ✅ ACCURATE - Matches reference calculations
+        """
         import math
         import numpy as np
         
-        # Get current vehicle type
-        vehicle_type = self.vehicle_type_combo.currentText()
-        
         # Get simulation parameters
-        duration = self.duration_input.value()
-        target_speed_kmh = self.speed_input.value()
+        duration = GRAPH_SIM_DEFAULTS['duration']  # Fixed default: 120 seconds (2m)
         gradient_deg = self.gradient_input.value()
         mode = self.mode_combo.currentText()
         
-        # Get vehicle parameters based on type
-        if vehicle_type == 'EV':
-            wheel_radius = self.ev_wheel_radius_input.value()
-            cd = self.ev_cd_input.value()
-            cr = self.ev_cr_input.value()
-            frontal_area = self.ev_frontal_area_input.value()
-            air_density = self.ev_air_density_input.value()
-            gear_ratio = self.ev_gear_ratio_input.value()
-            gear_efficiency = self.ev_gear_efficiency_input.value() / 100.0
-            motor_efficiency = self.ev_motor_efficiency_input.value() / 100.0
-            motor_base_rpm = self.ev_motor_base_rpm_input.value()
-            gvw = self.ev_gvw_input.value()
-            num_motors = 1  # EV has 1 motor
-        else:  # UGV
-            wheel_radius = self.ugv_wheel_radius_input.value()
-            cd = self.ugv_cd_input.value()
-            cr = self.ugv_cr_input.value()
-            frontal_area = self.ugv_frontal_area_input.value()
-            air_density = self.ugv_air_density_input.value()
-            gear_ratio = self.ugv_gear_ratio_input.value()
-            gear_efficiency = self.ugv_gear_efficiency_input.value() / 100.0
-            motor_efficiency = self.ugv_motor_efficiency_input.value() / 100.0
-            motor_base_rpm = self.ugv_motor_base_rpm_input.value()
-            gvw = self.ugv_gvw_input.value()
-            num_motors = self.ugv_num_powered_wheels_input.value()
+        # Get initial parameters from input fields
+        init_time = self.init_time.value()
+        init_speed_ms = self.init_vehicle_speed_ms.value()
+        init_speed_kmph = self.init_vehicle_speed_kmph.value()
+        init_motor_rpm = self.init_motor_speed_rpm.value()
+        init_num_power_wheels = self.init_num_power_wheels.value()
+        init_total_torque = self.init_total_motor_torque.value()
+        init_per_motor_torque = self.init_per_motor_torque.value()
+        init_per_motor_power = self.init_per_motor_power.value()
+        init_tractive = self.init_tractive_force.value()
+        init_froll = self.init_froll.value()
+        init_fdrag = self.init_fdrag.value()
+        init_fclimb = self.init_fclimb.value()
+        init_fload = self.init_fload.value()
+        init_fnet = self.init_fnet.value()
+        init_accel = self.init_vehicle_accel.value()
         
-        # Mode multiplier (Eco = 0.8, Boost = 1.2)
-        mode_multiplier = 1.2 if mode == 'boost' else 0.8
+        # Mode display (Eco-1, Boost-2)
+        mode_value = 2 if mode == 'boost' else 1
+        mode_display = f'Eco-{mode_value}' if mode == 'eco' else f'Boost-{mode_value}'
         
-        # Generate time steps (every 0.5 seconds)
-        time_steps = np.arange(0, duration + 0.5, 0.5)
+        # Generate time steps (every 0.5 seconds) starting from init_time
+        time_steps = np.arange(init_time, init_time + duration + 0.5, 0.5)
+        dt = 0.5  # Time step in seconds
         
         # Prepare data storage
         data = []
         
-        for t in time_steps:
-            # Calculate current speed (linear acceleration to target speed)
-            if t < duration / 2:
-                current_speed_kmh = (target_speed_kmh * t) / (duration / 2)
-            else:
-                current_speed_kmh = target_speed_kmh
-            
-            current_speed_ms = current_speed_kmh / 3.6
-            
-            # Calculate Motor Speed (RPM)
-            motor_speed_rpm = (current_speed_kmh * gear_ratio) / (2 * math.pi * wheel_radius * 0.001 * 60)
-            if motor_speed_rpm == 0:
-                motor_speed_rpm = motor_base_rpm
-            
-            # Calculate forces
-            F_drag = 0.5 * cd * air_density * frontal_area * current_speed_ms * current_speed_ms
-            F_roll = cr * gvw * 9.81
-            F_climb = gvw * 9.81 * math.sin(gradient_deg * math.pi / 180)
-            F_load = F_drag + F_roll + F_climb
-            
-            # Calculate tractive force (motor output force at wheels)
-            # For simplicity, assume tractive force equals load force during steady state
-            # During acceleration, add inertial force
-            if t < duration / 2:
-                # Acceleration phase
-                acceleration = (target_speed_kmh / 3.6) / (duration / 2)
-                F_inertia = gvw * acceleration
-                F_tractive = F_load + F_inertia
-            else:
-                # Constant speed phase
-                F_tractive = F_load
-                acceleration = 0
-            
-            # Net force
-            F_net = F_tractive - F_load
-            
-            # Calculate motor power and torque
-            # Power at wheels = Force * Velocity
-            power_at_wheels = F_tractive * current_speed_ms
-            
-            # Motor output power (accounting for gear efficiency)
-            motor_output_power = power_at_wheels / gear_efficiency if gear_efficiency > 0 else 0
-            
-            # Motor input power (accounting for motor efficiency)
-            motor_input_power = motor_output_power / motor_efficiency if motor_efficiency > 0 else 0
-            
-            # Apply mode multiplier
-            motor_input_power *= mode_multiplier
-            motor_output_power *= mode_multiplier
-            
-            # Total motor torque (Nm) = (Power * 60) / (2 * π * RPM)
-            if motor_speed_rpm > 0:
-                total_motor_torque = (motor_output_power * 60) / (2 * math.pi * motor_speed_rpm)
-            else:
-                total_motor_torque = 0
-            
-            # Per motor values
-            per_motor_torque = total_motor_torque / num_motors if num_motors > 0 else total_motor_torque
-            per_motor_power = motor_input_power / num_motors if num_motors > 0 else motor_input_power
+        # Get constants needed for calculations
+        gvw = EV_DEFAULTS['gvw']
+        gear_efficiency = EV_DEFAULTS['gear_efficiency'] / 100.0
+        gear_ratio = EV_DEFAULTS['gear_ratio']
+        wheel_radius = EV_DEFAULTS['wheel_radius']
+        cr = EV_DEFAULTS['cr']
+        cd = EV_DEFAULTS['cd']
+        air_density = EV_DEFAULTS['air_density']
+        frontal_area = EV_DEFAULTS['frontal_area']
+        
+        # ⚠️ LOCKED: Initialize state variables with initial values
+        # These values are used for the first row (t=0) and updated iteratively
+        current_speed_ms = init_speed_ms
+        current_speed_kmh = init_speed_kmph
+        motor_speed_rpm = init_motor_rpm
+        total_motor_torque = init_total_torque
+        per_motor_torque = init_per_motor_torque
+        per_motor_power = init_per_motor_power
+        F_tractive = init_tractive
+        F_roll = init_froll
+        F_drag = init_fdrag
+        F_climb = init_fclimb
+        F_load = init_fload
+        F_net = init_fnet
+        acceleration = init_accel
+        
+        # ⚠️ LOCKED: Iterative integration loop - DO NOT CHANGE
+        for i, t in enumerate(time_steps):
+            # For t=0, we already have initial values set above
+            # For t>0, calculate new values based on previous state
+            if i > 0:
+                # ⚠️ CRITICAL: Euler integration step
+                # Update speed using previous acceleration: v_new = v_old + a * dt
+                current_speed_ms = current_speed_ms + (acceleration * dt)
+                current_speed_ms = max(0, current_speed_ms)  # Prevent negative
+                current_speed_kmh = current_speed_ms * 3.6
+                
+                # Calculate Motor Speed (RPM) from current vehicle speed
+                motor_speed_rpm = (current_speed_kmh * gear_ratio) / (2 * 3.14159 * wheel_radius * 0.001 * 60)
+                
+                # Calculate Total Motor Torque based on mode and RPM
+                if mode == 'boost':
+                    if motor_speed_rpm < 500:
+                        total_motor_torque = 37 * 2  # Low RPM constant
+                    else:
+                        total_motor_torque = ((2000 * 60) / (2 * 3.14159 * motor_speed_rpm)) * 2
+                else:  # eco mode
+                    if motor_speed_rpm < 500:
+                        total_motor_torque = 19 * 2  # Low RPM constant
+                    else:
+                        total_motor_torque = ((1000 * 60) / (2 * 3.14159 * motor_speed_rpm)) * 2
+                
+                # Per motor calculations
+                per_motor_torque = total_motor_torque / init_num_power_wheels
+                per_motor_power = (2 * 3.14159 * motor_speed_rpm * per_motor_torque) / 60
+                
+                # Tractive force
+                F_tractive = (total_motor_torque * gear_efficiency * gear_ratio) / wheel_radius
+                
+                # Resistance forces
+                F_roll = cr * gvw * 9.81
+                F_drag = cd * air_density * frontal_area * current_speed_kmh * current_speed_kmh * 0.03858025308642
+                F_climb = gvw * 9.81 * math.sin(gradient_deg * 0.01745329)
+                
+                # Total load and net force
+                F_load = F_roll + F_drag + F_climb
+                F_net = F_tractive - F_load
+                
+                # Acceleration for NEXT step
+                acceleration = F_net / gvw
             
             # Store data
             data.append({
@@ -1285,9 +1384,9 @@ class EVSimulationApp(QMainWindow):
                 'Vehicle Speed (Kmph)': round(current_speed_kmh, 2),
                 'Motor Speed (RPM)': round(motor_speed_rpm, 1),
                 'Gradient (Degree)': gradient_deg,
-                'Mode': f'{mode.capitalize()}-{mode_multiplier}',
+                'Mode': mode_display,
                 'Total Motor Torque (Nm)': round(total_motor_torque, 2),
-                'Total Number of Power Wheel Motors': num_motors,
+                'Total Number of Power Wheels': init_num_power_wheels,
                 'PerMotor Torque (Nm)': round(per_motor_torque, 2),
                 'PerMotor Power (Watts)': round(per_motor_power, 1),
                 'Motoring Tractive Force F_Tractive (N)': round(F_tractive, 2),
@@ -1296,7 +1395,7 @@ class EVSimulationApp(QMainWindow):
                 'Fclimb (N)': round(F_climb, 2),
                 'F_Load Resistance (N)': round(F_load, 2),
                 'Net Force F_Net (N)': round(F_net, 2),
-                'Vehicle Acceleration (m/s)': round(acceleration, 3) if t < duration / 2 else 0
+                'Vehicle Acceleration (m/s)': round(acceleration, 3)
             })
         
         # Store data for export
@@ -1305,7 +1404,13 @@ class EVSimulationApp(QMainWindow):
         # Populate table
         self.populate_graph_table(data)
         
-        self.statusBar().showMessage(f'Generated {len(data)} data points for {vehicle_type} graph simulation')
+        # Plot in Speed, Power, Forces, and Motor tabs
+        self.plot_graph_simulation_speed(data)
+        self.plot_graph_simulation_power(data)
+        self.plot_graph_simulation_forces(data)
+        self.plot_graph_simulation_motor(data)
+        
+        self.statusBar().showMessage(f'Generated {len(data)} data points - All graph tabs updated with table data')
     
     def populate_graph_table(self, data):
         """Populate the graph data table with calculated values"""
@@ -1329,32 +1434,143 @@ class EVSimulationApp(QMainWindow):
         # Resize columns to content
         self.graph_data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     
-    def export_to_excel(self):
-        """Export graph simulation data to Excel"""
-        if not hasattr(self, 'graph_simulation_data') or not self.graph_simulation_data:
-            QMessageBox.warning(self, 'No Data', 'Please generate graph simulation data first!')
+    def plot_graph_simulation_speed(self, data):
+        """
+        Plot graph simulation speed data in the Speed tab.
+        This uses data from the Data Table (generate_graph_simulation_data).
+        """
+        if not data:
             return
         
-        # Ask user for file location
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            'Save Excel File',
-            'graph_simulation_data.xlsx',
-            'Excel Files (*.xlsx)'
-        )
+        # Extract time and speed data from table
+        time = [row['Time'] for row in data]
+        speed_kmh = [row['Vehicle Speed (Kmph)'] for row in data]
         
-        if not file_path:
+        print(f"DEBUG: Plotting {len(data)} data points from table")
+        print(f"DEBUG: Time range: {time[0]} to {time[-1]} seconds")
+        print(f"DEBUG: Speed range: {speed_kmh[0]} to {max(speed_kmh)} km/h")
+        
+        # Clear and plot on speed canvas
+        self.speed_canvas.fig.clear()
+        ax = self.speed_canvas.fig.add_subplot(111)
+        
+        # Plot with orange line matching reference
+        ax.plot(time, speed_kmh, color='orange', linewidth=2.5, label='Vehicle Speed (Kmph)')
+        
+        # Formatting to match reference
+        ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+        ax.set_ylabel('Vehicle Speed (Kmph)', fontsize=10)
+        ax.set_title('Vehicle Speed (Kmph)', fontsize=12, fontweight='bold')
+        ax.legend(loc='lower right', fontsize=9)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Adjust and draw
+        self.speed_canvas.fig.tight_layout()
+        self.speed_canvas.draw()
+    
+    def plot_graph_simulation_power(self, data):
+        """
+        Plot graph simulation power data in the Power tab.
+        This uses data from the Data Table (generate_graph_simulation_data).
+        """
+        if not data:
             return
         
-        try:
-            # Convert to DataFrame and export
-            df = pd.DataFrame(self.graph_simulation_data)
-            df.to_excel(file_path, index=False, sheet_name='Graph Simulation')
-            
-            QMessageBox.information(self, 'Success', f'Data exported successfully to:\n{file_path}')
-            self.statusBar().showMessage(f'Exported data to {file_path}')
-        except Exception as e:
-            QMessageBox.critical(self, 'Export Error', f'Failed to export data:\n{str(e)}')
+        # Extract time and power data from table
+        time = [row['Time'] for row in data]
+        power_watts = [row['PerMotor Power (Watts)'] for row in data]
+        
+        # Clear and plot on power canvas
+        self.power_canvas.fig.clear()
+        ax = self.power_canvas.fig.add_subplot(111)
+        
+        # Plot with orange line matching reference
+        ax.plot(time, power_watts, color='orange', linewidth=2.5, label='PerMotor Power (Watts)')
+        
+        # Formatting to match reference
+        ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+        ax.set_ylabel('PerMotor Power (Watts)', fontsize=10)
+        ax.set_title('Power', fontsize=12, fontweight='bold')
+        ax.legend(loc='upper right', fontsize=9)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Adjust and draw
+        self.power_canvas.fig.tight_layout()
+        self.power_canvas.draw()
+    
+    def plot_graph_simulation_forces(self, data):
+        """
+        Plot graph simulation forces data in the Forces tab.
+        This uses data from the Data Table (generate_graph_simulation_data).
+        """
+        if not data:
+            return
+        
+        # Extract time and force data from table
+        time = [row['Time'] for row in data]
+        f_tractive = [row['Motoring Tractive Force F_Tractive (N)'] for row in data]
+        f_roll = [row['Froll (N)'] for row in data]
+        f_drag = [row['Fdrag (N)'] for row in data]
+        f_load = [row['F_Load Resistance (N)'] for row in data]
+        
+        # Clear and plot on forces canvas
+        self.forces_canvas.fig.clear()
+        ax = self.forces_canvas.fig.add_subplot(111)
+        
+        # Plot with matching colors from reference
+        ax.plot(time, f_tractive, color='orange', linewidth=2.5, label='Motoring Tractive Force F_Tractive (N)')
+        ax.plot(time, f_roll, color='blue', linewidth=2.5, label='Froll (N)')
+        ax.plot(time, f_drag, color='yellow', linewidth=2.5, label='Fdrag (N)')
+        ax.plot(time, f_load, color='gray', linewidth=2.5, label='F_Load Resistance (N)')
+        
+        # Formatting to match reference
+        ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+        ax.set_ylabel('Force (N)', fontsize=10)
+        ax.set_title('Forces', fontsize=12, fontweight='bold')
+        ax.legend(fontsize=8, loc='upper right')
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Adjust and draw
+        self.forces_canvas.fig.tight_layout()
+        self.forces_canvas.draw()
+    
+    def plot_graph_simulation_motor(self, data):
+        """
+        Plot graph simulation motor data in the Motor tab.
+        This uses data from the Data Table (generate_graph_simulation_data).
+        Shows two subplots: Motor Speed (RPM) and Total Motor Torque (Nm).
+        """
+        if not data:
+            return
+        
+        # Extract time and motor data from table
+        time = [row['Time'] for row in data]
+        motor_rpm = [row['Motor Speed (RPM)'] for row in data]
+        motor_torque = [row['Total Motor Torque (Nm)'] for row in data]
+        
+        # Clear and plot on motor canvas
+        self.motor_canvas.fig.clear()
+        
+        # Top subplot - Motor Speed (RPM)
+        ax1 = self.motor_canvas.fig.add_subplot(211)
+        ax1.plot(time, motor_rpm, color='blue', linewidth=2.5, label='Motor Speed (RPM)')
+        ax1.set_ylabel('Motor Speed (RPM)', fontsize=10)
+        ax1.set_title('Motor Speed (RPM)', fontsize=12, fontweight='bold')
+        ax1.legend(loc='lower right', fontsize=8)
+        ax1.grid(True, alpha=0.3, linestyle='--')
+        
+        # Bottom subplot - Total Motor Torque (Nm)
+        ax2 = self.motor_canvas.fig.add_subplot(212)
+        ax2.plot(time, motor_torque, color='blue', linewidth=2.5, label='Total Motor Torque (Nm)')
+        ax2.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
+        ax2.set_ylabel('Total Motor Torque (Nm)', fontsize=10)
+        ax2.set_title('Total Motor Torque (Nm)', fontsize=12, fontweight='bold')
+        ax2.legend(loc='upper right', fontsize=8)
+        ax2.grid(True, alpha=0.3, linestyle='--')
+        
+        # Adjust and draw
+        self.motor_canvas.fig.tight_layout()
+        self.motor_canvas.draw()
     
     def show_about(self):
         """Show about dialog"""
@@ -1426,69 +1642,186 @@ class EVSimulationApp(QMainWindow):
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)
         
-        # Simulation Parameters
-        self.sim_group = QGroupBox('Simulation Parameters')
-        sim_layout = QGridLayout()
-        
-        # Duration
-        sim_layout.addWidget(QLabel('Duration (s):'), 0, 0)
-        self.duration_input = QSpinBox()
-        self.duration_input.setRange(10, 600)
-        self.duration_input.setValue(90)
-        sim_layout.addWidget(self.duration_input, 0, 1)
-        
-        # Target Speed
-        sim_layout.addWidget(QLabel('Target Speed (km/h):'), 1, 0)
-        self.speed_input = QDoubleSpinBox()
-        self.speed_input.setRange(0, 200)
-        self.speed_input.setValue(150)  # High default - continuous acceleration like table
-        sim_layout.addWidget(self.speed_input, 1, 1)
+        # Graph Simulation Initial Parameters (merged with Simulation Parameters)
+        self.graph_sim_params_group = QGroupBox('Graph Simulation Initial Parameters')
+        graph_sim_layout = QGridLayout()
         
         # Gradient
-        sim_layout.addWidget(QLabel('Gradient (°):'), 2, 0)
+        graph_sim_layout.addWidget(QLabel('Gradient (°):'), 0, 0)
         self.gradient_input = QDoubleSpinBox()
         self.gradient_input.setRange(-30, 60)
-        self.gradient_input.setValue(0)
-        sim_layout.addWidget(self.gradient_input, 2, 1)
+        self.gradient_input.setValue(GRAPH_SIM_DEFAULTS['gradient_deg'])
+        self.gradient_input.valueChanged.connect(self.update_graph_sim_calculated_values)
+        graph_sim_layout.addWidget(self.gradient_input, 0, 1)
         
         # Mode
-        sim_layout.addWidget(QLabel('Mode:'), 3, 0)
+        graph_sim_layout.addWidget(QLabel('Mode:'), 1, 0)
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(['boost', 'eco'])
-        sim_layout.addWidget(self.mode_combo, 3, 1)
+        self.mode_combo.currentTextChanged.connect(self.update_graph_sim_calculated_values)
+        graph_sim_layout.addWidget(self.mode_combo, 1, 1)
         
-        # Constant Power
-        sim_layout.addWidget(QLabel('Constant Power (W):'), 4, 0)
-        self.constant_power_input = QDoubleSpinBox()
-        self.constant_power_input.setRange(100, 50000)
-        self.constant_power_input.setValue(2000)
-        self.constant_power_input.setDecimals(0)
-        self.constant_power_input.setSingleStep(100)
-        self.constant_power_input.valueChanged.connect(self.update_constant_torque)
-        sim_layout.addWidget(self.constant_power_input, 4, 1)
+        # Time (s)
+        graph_sim_layout.addWidget(QLabel('Time (s):'), 2, 0)
+        self.init_time = QDoubleSpinBox()
+        self.init_time.setRange(0, 1000)
+        self.init_time.setValue(GRAPH_SIM_DEFAULTS['init_time'])
+        self.init_time.setDecimals(1)
+        self.init_time.setSingleStep(0.5)
+        graph_sim_layout.addWidget(self.init_time, 2, 1)
         
-        # Base RPM
-        sim_layout.addWidget(QLabel('Base RPM:'), 5, 0)
-        self.base_rpm_input = QDoubleSpinBox()
-        self.base_rpm_input.setRange(50, 5000)
-        self.base_rpm_input.setValue(500)
-        self.base_rpm_input.setDecimals(0)
-        self.base_rpm_input.setSingleStep(10)
-        self.base_rpm_input.valueChanged.connect(self.update_constant_torque)
-        sim_layout.addWidget(self.base_rpm_input, 5, 1)
+        # Initial Vehicle Speed (m/s) - BASE VALUE (controls calculated fields)
+        graph_sim_layout.addWidget(QLabel('Initial Vehicle Speed (m/s):'), 3, 0)
+        self.init_vehicle_speed_ms = QDoubleSpinBox()
+        self.init_vehicle_speed_ms.setRange(0, 100)
+        self.init_vehicle_speed_ms.setValue(GRAPH_SIM_DEFAULTS['init_vehicle_speed_ms'])
+        self.init_vehicle_speed_ms.setDecimals(3)
+        self.init_vehicle_speed_ms.setSingleStep(0.1)
+        self.init_vehicle_speed_ms.valueChanged.connect(self.update_graph_sim_calculated_values)
+        graph_sim_layout.addWidget(self.init_vehicle_speed_ms, 3, 1)
         
-        # Constant Torque (calculated, read-only)
-        sim_layout.addWidget(QLabel('Constant Torque (Nm):'), 6, 0)
-        self.constant_torque_display = QLineEdit()
-        self.constant_torque_display.setReadOnly(True)
-        self.constant_torque_display.setStyleSheet("QLineEdit { background-color: #f0f0f0; }")
-        sim_layout.addWidget(self.constant_torque_display, 6, 1)
+        # Initial Motor Speed (RPM) - CALCULATED from vehicle speed and gear ratio
+        graph_sim_layout.addWidget(QLabel('Initial Motor Speed (RPM):'), 4, 0)
+        self.init_motor_speed_rpm = QDoubleSpinBox()
+        self.init_motor_speed_rpm.setRange(0, 10000)
+        self.init_motor_speed_rpm.setValue(GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'])
+        self.init_motor_speed_rpm.setDecimals(1)
+        self.init_motor_speed_rpm.setSingleStep(10)
+        self.init_motor_speed_rpm.setReadOnly(True)
+        self.init_motor_speed_rpm.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_motor_speed_rpm, 4, 1)
         
-        # Calculate initial constant torque
-        self.update_constant_torque()
+        # Total Number of Power Wheel Motors
+        graph_sim_layout.addWidget(QLabel('Number of Power Wheels:'), 5, 0)
+        self.init_num_power_wheels = QSpinBox()
+        self.init_num_power_wheels.setRange(1, 8)
+        self.init_num_power_wheels.setValue(GRAPH_SIM_DEFAULTS['init_num_power_wheels'])
+        self.init_num_power_wheels.valueChanged.connect(self.update_graph_sim_calculated_values)
+        graph_sim_layout.addWidget(self.init_num_power_wheels, 5, 1)
         
-        self.sim_group.setLayout(sim_layout)
-        layout.addWidget(self.sim_group)
+        # Initial Total Motor Torque (Nm) - CALCULATED from mode and motor RPM
+        graph_sim_layout.addWidget(QLabel('Initial Total Motor Torque (Nm):'), 6, 0)
+        self.init_total_motor_torque = QDoubleSpinBox()
+        self.init_total_motor_torque.setRange(0, 10000)
+        self.init_total_motor_torque.setValue(GRAPH_SIM_DEFAULTS['init_total_motor_torque'])
+        self.init_total_motor_torque.setDecimals(2)
+        self.init_total_motor_torque.setSingleStep(1)
+        self.init_total_motor_torque.setReadOnly(True)
+        self.init_total_motor_torque.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_total_motor_torque, 6, 1)
+        
+        # Initial PerMotor Power (Watts) - CALCULATED from motor RPM and per-motor torque
+        graph_sim_layout.addWidget(QLabel('Initial PerMotor Power (W):'), 7, 0)
+        self.init_per_motor_power = QDoubleSpinBox()
+        self.init_per_motor_power.setRange(0, 50000)
+        self.init_per_motor_power.setValue(GRAPH_SIM_DEFAULTS['init_per_motor_power'])
+        self.init_per_motor_power.setDecimals(1)
+        self.init_per_motor_power.setSingleStep(100)
+        self.init_per_motor_power.setReadOnly(True)
+        self.init_per_motor_power.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_per_motor_power, 7, 1)
+        
+        # Initial Tractive Force (N) - CALCULATED from total torque, gear efficiency, gear ratio, wheel radius
+        graph_sim_layout.addWidget(QLabel('Initial Tractive Force (N):'), 8, 0)
+        self.init_tractive_force = QDoubleSpinBox()
+        self.init_tractive_force.setRange(0, 10000)
+        self.init_tractive_force.setValue(GRAPH_SIM_DEFAULTS['init_tractive_force'])
+        self.init_tractive_force.setDecimals(2)
+        self.init_tractive_force.setSingleStep(10)
+        self.init_tractive_force.setReadOnly(True)
+        self.init_tractive_force.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_tractive_force, 8, 1)
+        
+        # Initial Froll (N) - CALCULATED from rolling resistance (cr × mass × g)
+        graph_sim_layout.addWidget(QLabel('Initial Froll (N):'), 9, 0)
+        self.init_froll = QDoubleSpinBox()
+        self.init_froll.setRange(0, 5000)
+        self.init_froll.setValue(GRAPH_SIM_DEFAULTS['init_froll'])
+        self.init_froll.setDecimals(2)
+        self.init_froll.setSingleStep(1)
+        self.init_froll.setReadOnly(True)
+        self.init_froll.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_froll, 9, 1)
+        
+        # Initial Fdrag (N) - CALCULATED from aerodynamic drag (cd × ρ × A × v²)
+        graph_sim_layout.addWidget(QLabel('Initial Fdrag (N):'), 10, 0)
+        self.init_fdrag = QDoubleSpinBox()
+        self.init_fdrag.setRange(0, 5000)
+        self.init_fdrag.setValue(GRAPH_SIM_DEFAULTS['init_fdrag'])
+        self.init_fdrag.setDecimals(2)
+        self.init_fdrag.setSingleStep(1)
+        self.init_fdrag.setReadOnly(True)
+        self.init_fdrag.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_fdrag, 10, 1)
+        
+        # Initial Fclimb (N) - CALCULATED from climbing force (mass × g × sin(gradient))
+        graph_sim_layout.addWidget(QLabel('Initial Fclimb (N):'), 11, 0)
+        self.init_fclimb = QDoubleSpinBox()
+        self.init_fclimb.setRange(0, 5000)
+        self.init_fclimb.setValue(GRAPH_SIM_DEFAULTS['init_fclimb'])
+        self.init_fclimb.setDecimals(2)
+        self.init_fclimb.setSingleStep(1)
+        self.init_fclimb.setReadOnly(True)
+        self.init_fclimb.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_fclimb, 11, 1)
+        
+        # Initial Vehicle Speed (Kmph) - CALCULATED from m/s
+        graph_sim_layout.addWidget(QLabel('Initial Vehicle Speed (Kmph):'), 12, 0)
+        self.init_vehicle_speed_kmph = QDoubleSpinBox()
+        self.init_vehicle_speed_kmph.setRange(0, 300)
+        self.init_vehicle_speed_kmph.setValue(GRAPH_SIM_DEFAULTS['init_vehicle_speed_kmph'])
+        self.init_vehicle_speed_kmph.setDecimals(2)
+        self.init_vehicle_speed_kmph.setSingleStep(1)
+        self.init_vehicle_speed_kmph.setReadOnly(True)
+        self.init_vehicle_speed_kmph.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_vehicle_speed_kmph, 12, 1)
+        
+        # Initial PerMotor Torque (Nm) - CALCULATED from total torque and number of wheels
+        graph_sim_layout.addWidget(QLabel('Initial PerMotor Torque (Nm):'), 13, 0)
+        self.init_per_motor_torque = QDoubleSpinBox()
+        self.init_per_motor_torque.setRange(0, 10000)
+        self.init_per_motor_torque.setValue(GRAPH_SIM_DEFAULTS['init_per_motor_torque'])
+        self.init_per_motor_torque.setDecimals(2)
+        self.init_per_motor_torque.setSingleStep(1)
+        self.init_per_motor_torque.setReadOnly(True)
+        self.init_per_motor_torque.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_per_motor_torque, 13, 1)
+        
+        # Initial F_Load Resistance (N) - CALCULATED from froll + fdrag + fclimb
+        graph_sim_layout.addWidget(QLabel('Initial F_Load Resistance (N):'), 14, 0)
+        self.init_fload = QDoubleSpinBox()
+        self.init_fload.setRange(0, 10000)
+        self.init_fload.setValue(GRAPH_SIM_DEFAULTS['init_fload'])
+        self.init_fload.setDecimals(2)
+        self.init_fload.setSingleStep(1)
+        self.init_fload.setReadOnly(True)
+        self.init_fload.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_fload, 14, 1)
+        
+        # Initial Net Force F_Net (N) - CALCULATED from tractive force - load resistance
+        graph_sim_layout.addWidget(QLabel('Initial Net Force F_Net (N):'), 15, 0)
+        self.init_fnet = QDoubleSpinBox()
+        self.init_fnet.setRange(-10000, 10000)
+        self.init_fnet.setValue(GRAPH_SIM_DEFAULTS['init_fnet'])
+        self.init_fnet.setDecimals(2)
+        self.init_fnet.setSingleStep(1)
+        self.init_fnet.setReadOnly(True)
+        self.init_fnet.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_fnet, 15, 1)
+        
+        # Initial Vehicle Acceleration (m/s²) - CALCULATED from net force / mass
+        graph_sim_layout.addWidget(QLabel('Initial Acceleration (m/s²):'), 16, 0)
+        self.init_vehicle_accel = QDoubleSpinBox()
+        self.init_vehicle_accel.setRange(-10, 10)
+        self.init_vehicle_accel.setValue(GRAPH_SIM_DEFAULTS['init_vehicle_accel'])
+        self.init_vehicle_accel.setDecimals(3)
+        self.init_vehicle_accel.setSingleStep(0.1)
+        self.init_vehicle_accel.setReadOnly(True)
+        self.init_vehicle_accel.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
+        graph_sim_layout.addWidget(self.init_vehicle_accel, 16, 1)
+        
+        self.graph_sim_params_group.setLayout(graph_sim_layout)
+        layout.addWidget(self.graph_sim_params_group)
         
         # EV-Specific Parameters - Organized into scrollable area
         self.ev_params_group = QGroupBox('EV Parameters')
@@ -2285,19 +2618,6 @@ class EVSimulationApp(QMainWindow):
         
         layout.addWidget(self.btn_layout_widget)
         
-        # Results Summary
-        self.results_group = QGroupBox('Results Summary')
-        results_layout = QVBoxLayout()
-        
-        self.results_text = QTextEdit()
-        self.results_text.setReadOnly(True)
-        self.results_text.setMinimumHeight(150)
-        self.results_text.setMaximumHeight(250)
-        results_layout.addWidget(self.results_text)
-        
-        self.results_group.setLayout(results_layout)
-        layout.addWidget(self.results_group)
-        
         layout.addStretch()
         
         # Set content widget into scroll area
@@ -2342,10 +2662,6 @@ class EVSimulationApp(QMainWindow):
         self.motor_canvas = PlotCanvas(self, width=8, height=6)
         self.tab_widget.addTab(self.motor_canvas, '⚙️ Motor')
         
-        # Energy plot
-        self.energy_canvas = PlotCanvas(self, width=8, height=6)
-        self.tab_widget.addTab(self.energy_canvas, '🔋 Energy')
-        
         # Data Table tab for graph simulation parameters
         self.graph_sim_tab = QWidget()
         graph_sim_layout = QVBoxLayout(self.graph_sim_tab)
@@ -2356,18 +2672,6 @@ class EVSimulationApp(QMainWindow):
         table_title.setFont(QFont('Arial', 12, QFont.Weight.Bold))
         header_layout.addWidget(table_title)
         header_layout.addStretch()
-        
-        # Generate button
-        self.generate_graph_btn = QPushButton('🔄 Generate Graph Data')
-        self.generate_graph_btn.setStyleSheet('background-color: #2196F3; color: white; font-weight: bold; padding: 8px; border-radius: 4px;')
-        self.generate_graph_btn.clicked.connect(self.generate_graph_simulation_data)
-        header_layout.addWidget(self.generate_graph_btn)
-        
-        # Export button
-        self.export_excel_btn = QPushButton('📊 Export to Excel')
-        self.export_excel_btn.setStyleSheet('background-color: #4CAF50; color: white; font-weight: bold; padding: 8px; border-radius: 4px;')
-        self.export_excel_btn.clicked.connect(self.export_to_excel)
-        header_layout.addWidget(self.export_excel_btn)
         
         graph_sim_layout.addLayout(header_layout)
         
@@ -2402,258 +2706,55 @@ class EVSimulationApp(QMainWindow):
         """Load predefined scenario"""
         if scenario_type == 'flat':
             self.gradient_input.setValue(0)
-            self.speed_input.setValue(85)
-            self.duration_input.setValue(90)
         elif scenario_type == 'gentle':
             self.gradient_input.setValue(7)
-            self.speed_input.setValue(70)
-            self.duration_input.setValue(100)
         elif scenario_type == 'hill':
             self.gradient_input.setValue(15)
-            self.speed_input.setValue(60)
-            self.duration_input.setValue(120)
         elif scenario_type == 'steep':
             self.gradient_input.setValue(30)
-            self.speed_input.setValue(50)
-            self.duration_input.setValue(150)
         
         self.statusBar().showMessage(f'Loaded {scenario_type} terrain scenario')
     
-    def update_parameters(self):
-        """Update engine parameters from UI"""
-        vehicle_type = self.vehicle_type_combo.currentText()
-        
-        if vehicle_type == 'EV':
-            self.params.drag_coefficient = self.ev_cd_input.value()
-            self.params.rolling_resistance = self.ev_cr_input.value()
-            self.params.vehicle_mass = self.ev_vehicle_weight_input.value()
-            self.params.frontal_area = self.ev_frontal_area_input.value()
-            self.params.wheel_radius = self.ev_wheel_radius_input.value()
-            self.params.gear_ratio = self.ev_gear_ratio_input.value()
-            self.params.gear_efficiency = self.ev_gear_efficiency_input.value() / 100.0
-            self.params.motor_efficiency = self.ev_motor_efficiency_input.value() / 100.0
-        else:  # UGV
-            self.params.drag_coefficient = self.ugv_cd_input.value()
-            self.params.rolling_resistance = self.ugv_cr_input.value()
-            self.params.vehicle_mass = self.ugv_vehicle_weight_input.value()
-            self.params.frontal_area = self.ugv_frontal_area_input.value()
-            self.params.wheel_radius = self.ugv_wheel_radius_input.value()
-            self.params.gear_ratio = self.ugv_gear_ratio_input.value()
-            self.params.gear_efficiency = self.ugv_gear_efficiency_input.value() / 100.0
-            self.params.motor_efficiency = self.ugv_motor_efficiency_input.value() / 100.0
-        
-        # Update motor torque curve parameters from Simulation Parameters
-        self.params.base_rpm = self.base_rpm_input.value()
-        constant_power = self.constant_power_input.value()
-        
-        # Set power based on current mode selection
-        mode = self.mode_combo.currentText()
-        if mode == 'eco':
-            self.params.max_power_eco = constant_power
-        else:  # boost
-            self.params.max_power_boost = constant_power
-        
-        self.engine = EVSimulationEngine(self.params)
-    
-    def update_constant_torque(self):
-        """Calculate and update constant torque display based on power and base RPM"""
-        import math
-        
-        constant_power = self.constant_power_input.value()
-        base_rpm = self.base_rpm_input.value()
-        
-        if base_rpm > 0:
-            # Formula: Torque = (Power * 60) / (2 * π * RPM)
-            constant_torque = (constant_power * 60) / (2 * math.pi * base_rpm)
-            self.constant_torque_display.setText(f"{constant_torque:.5f}")
-        else:
-            self.constant_torque_display.setText("N/A")
-    
     def run_simulation(self):
-        """Run the simulation"""
-        self.update_parameters()
-        
-        duration = self.duration_input.value()
-        target_speed = self.speed_input.value()
-        gradient = self.gradient_input.value()
-        mode = self.mode_combo.currentText()
-        
+        """Run the simulation - directly generates table data"""
         self.run_btn.setEnabled(False)
         self.statusBar().showMessage('Running simulation...')
         
-        # Run simulation in thread
-        self.sim_thread = SimulationThread(
-            self.engine, duration, target_speed, gradient, mode
-        )
-        self.sim_thread.finished.connect(self.on_simulation_finished)
-        self.sim_thread.start()
-    
-    def on_simulation_finished(self, stats):
-        """Handle simulation completion"""
-        # Update plots
-        history = self.engine.history
-        
-        self.speed_canvas.plot_results(history, 'speed')
-        self.power_canvas.plot_results(history, 'power')
-        self.forces_canvas.plot_results(history, 'forces')
-        self.motor_canvas.plot_results(history, 'motor')
-        self.energy_canvas.plot_results(history, 'energy')
-        
-        # Update results text with HTML formatting
-        results = f"""
-        <html>
-        <head>
-        <style>
-            body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 5px; }}
-            .header-box {{ 
-                border: 2px solid #333; 
-                background: linear-gradient(to right, #f0f0f0, #e0e0e0);
-                padding: 8px; 
-                margin-bottom: 15px;
-                text-align: center;
-                border-radius: 5px;
-            }}
-            .header-title {{ 
-                font-size: 14px; 
-                font-weight: bold; 
-                color: #333;
-                letter-spacing: 1px;
-            }}
-            .section {{ 
-                margin-bottom: 15px; 
-                background: #ffffff;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                padding: 10px;
-            }}
-            .section-title {{ 
-                font-size: 12px; 
-                font-weight: bold; 
-                color: #2196F3;
-                margin-bottom: 8px;
-                padding-bottom: 5px;
-                border-bottom: 2px solid #2196F3;
-            }}
-            .metric-row {{ 
-                display: flex; 
-                justify-content: space-between;
-                padding: 3px 0;
-                font-size: 11px;
-            }}
-            .metric-label {{ 
-                color: #555;
-                font-weight: 500;
-            }}
-            .metric-value {{ 
-                color: #000;
-                font-weight: bold;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-            }}
-            td {{
-                padding: 4px 8px;
-                font-size: 11px;
-            }}
-            .label-col {{
-                text-align: left;
-                color: #555;
-                width: 60%;
-            }}
-            .value-col {{
-                text-align: right;
-                color: #000;
-                font-weight: bold;
-                width: 40%;
-            }}
-        </style>
-        </head>
-        <body>
-            <div class="header-box">
-                <div class="header-title">SIMULATION RESULTS SUMMARY</div>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">📊 PERFORMANCE METRICS</div>
-                <table>
-                    <tr>
-                        <td class="label-col">Max Speed:</td>
-                        <td class="value-col">{stats['max_speed_kmh']:.2f} km/h</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Avg Speed:</td>
-                        <td class="value-col">{stats['avg_speed_kmh']:.2f} km/h</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Max Acceleration:</td>
-                        <td class="value-col">{stats['max_acceleration']:.2f} m/s²</td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">⚙️ MOTOR PERFORMANCE</div>
-                <table>
-                    <tr>
-                        <td class="label-col">Max Motor RPM:</td>
-                        <td class="value-col">{stats['max_motor_rpm']:.0f} RPM</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Max Motor Torque:</td>
-                        <td class="value-col">{stats['max_motor_torque']:.2f} Nm</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Max Motor Power:</td>
-                        <td class="value-col">{stats['max_motor_power_kw']:.2f} kW</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Avg Motor Power:</td>
-                        <td class="value-col">{stats['avg_power_kw']:.2f} kW</td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="section">
-                <div class="section-title">🔋 ENERGY & EFFICIENCY</div>
-                <table>
-                    <tr>
-                        <td class="label-col">Total Distance:</td>
-                        <td class="value-col">{stats['total_distance_km']:.3f} km</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Total Energy:</td>
-                        <td class="value-col">{stats['total_energy_kwh']:.4f} kWh</td>
-                    </tr>
-                    <tr>
-                        <td class="label-col">Energy per km:</td>
-                        <td class="value-col">{stats['energy_per_km_wh']:.2f} Wh/km</td>
-                    </tr>
-                </table>
-            </div>
-        </body>
-        </html>
-        """
-        self.results_text.setHtml(results)
+        # Directly generate table data (no background thread needed - it's fast)
+        self.generate_graph_simulation_data()
         
         self.run_btn.setEnabled(True)
-        self.statusBar().showMessage('Simulation completed successfully!')
+        # Status message updated by generate_graph_simulation_data
     
     def export_results(self):
-        """Export simulation results to CSV"""
-        if not self.engine.history['time']:
+        """Export simulation table data"""
+        # Check if we have data to export
+        has_table_data = hasattr(self, 'graph_simulation_data') and bool(self.graph_simulation_data)
+        
+        if not has_table_data:
             QMessageBox.warning(self, 'No Data', 'Please run a simulation first!')
             return
         
+        # Ask user for export file location (Excel format)
         filename, _ = QFileDialog.getSaveFileName(
-            self, 'Export Results', '', 'CSV Files (*.csv);;All Files (*)'
+            self, 'Export Results', 'simulation_results.xlsx', 'Excel Files (*.xlsx);;All Files (*)'
         )
         
         if filename:
-            df = pd.DataFrame(self.engine.history)
-            df.to_csv(filename, index=False)
-            QMessageBox.information(self, 'Success', f'Results exported to {filename}')
-            self.statusBar().showMessage(f'Exported to {filename}')
+            try:
+                with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                    # Export simulation table data
+                    df_table = pd.DataFrame(self.graph_simulation_data)
+                    df_table.to_excel(writer, sheet_name='Simulation Data', index=False)
+                
+                # Success message
+                message = f'Exported to:\n{filename}\n\nRows: {len(self.graph_simulation_data)}'
+                QMessageBox.information(self, 'Export Successful', message)
+                self.statusBar().showMessage(f'Exported {len(self.graph_simulation_data)} rows to {filename}')
+            
+            except Exception as e:
+                QMessageBox.critical(self, 'Export Failed', f'Error exporting data:\n{str(e)}')
+                self.statusBar().showMessage('Export failed')
     
     def update_ev_calculated_weights(self):
         """Auto-update calculated weight fields based on formulas"""
@@ -2680,6 +2781,90 @@ class EVSimulationApp(QMainWindow):
         passenger_weight = self.ugv_passenger_weight_input.value()
         gvw = kerb_weight + passenger_weight
         self.ugv_gvw_input.setValue(gvw)
+    
+    def update_graph_sim_calculated_values(self):
+        """Auto-update graph simulation calculated fields based on formulas"""
+        # Formula 1: init_vehicle_speed_kmph = init_vehicle_speed_ms * 3.6
+        speed_ms = self.init_vehicle_speed_ms.value()
+        speed_kmph = speed_ms * 3.6
+        self.init_vehicle_speed_kmph.setValue(speed_kmph)
+        
+        # Formula 2: init_motor_speed_rpm = (speed_kmph * gear_ratio) / (2 * π * wheel_radius * 0.001 * 60)
+        # Uses EV_DEFAULTS for gear_ratio and wheel_radius
+        gear_ratio = EV_DEFAULTS['gear_ratio']
+        wheel_radius = EV_DEFAULTS['wheel_radius']
+        motor_rpm = (speed_kmph * gear_ratio) / (2 * 3.14159 * wheel_radius * 0.001 * 60)
+        self.init_motor_speed_rpm.setValue(motor_rpm)
+        
+        # Formula 3: init_total_motor_torque based on mode and motor RPM
+        # IF(mode=boost, IF(RPM<500, 37, (2000*60)/(2*π*RPM)), IF(RPM<500, 19, (1000*60)/(2*π*RPM))) * 2
+        mode = self.mode_combo.currentText()
+        
+        if mode == 'boost':
+            if motor_rpm < 500:
+                torque = 37  # Constant torque for low RPM (including 0)
+            else:
+                torque = (2000 * 60) / (2 * 3.14159 * motor_rpm)
+        else:  # eco mode
+            if motor_rpm < 500:
+                torque = 19  # Constant torque for low RPM (including 0)
+            else:
+                torque = (1000 * 60) / (2 * 3.14159 * motor_rpm)
+        
+        total_torque = torque * 2
+        self.init_total_motor_torque.setValue(total_torque)
+        
+        # Formula 4: init_per_motor_torque = total_torque / num_power_wheels
+        num_power_wheels = self.init_num_power_wheels.value()
+        per_motor_torque = total_torque / num_power_wheels
+        self.init_per_motor_torque.setValue(per_motor_torque)
+        
+        # Formula 5: init_per_motor_power = (2π × RPM × per_motor_torque) / 60
+        per_motor_power = (2 * 3.14159 * motor_rpm * per_motor_torque) / 60
+        self.init_per_motor_power.setValue(per_motor_power)
+        
+        # Formula 6: init_tractive_force = (total_torque × gear_efficiency × gear_ratio) / wheel_radius
+        # Uses EV_DEFAULTS for gear_efficiency, gear_ratio, and wheel_radius
+        gear_efficiency = EV_DEFAULTS['gear_efficiency'] / 100.0  # Convert % to decimal
+        gear_ratio = EV_DEFAULTS['gear_ratio']
+        wheel_radius = EV_DEFAULTS['wheel_radius']
+        tractive_force = (total_torque * gear_efficiency * gear_ratio) / wheel_radius
+        self.init_tractive_force.setValue(tractive_force)
+        
+        # Formula 7: init_froll = cr × mass × g (rolling resistance)
+        # Uses EV_DEFAULTS for cr and gvw
+        cr = EV_DEFAULTS['cr']
+        gvw = EV_DEFAULTS['gvw']
+        froll = cr * gvw * 9.81
+        self.init_froll.setValue(froll)
+        
+        # Formula 8: init_fdrag = cd × air_density × frontal_area × speed² × 0.03858025308642 (aerodynamic drag)
+        # Uses EV_DEFAULTS for cd, air_density, frontal_area
+        cd = EV_DEFAULTS['cd']
+        air_density = EV_DEFAULTS['air_density']
+        frontal_area = EV_DEFAULTS['frontal_area']
+        fdrag = cd * air_density * frontal_area * speed_kmph * speed_kmph * 0.03858025308642
+        self.init_fdrag.setValue(fdrag)
+        
+        # Formula 9: init_fclimb = mass × g × sin(gradient) (climbing force)
+        # Uses EV_DEFAULTS for gvw
+        import math
+        gradient_deg = self.gradient_input.value()
+        fclimb = gvw * 9.81 * math.sin(gradient_deg * 0.01745329)
+        self.init_fclimb.setValue(fclimb)
+        
+        # Formula 10: init_fload = froll + fdrag + fclimb (total load resistance)
+        fload = froll + fdrag + fclimb
+        self.init_fload.setValue(fload)
+        
+        # Formula 11: init_fnet = tractive_force - fload (net force)
+        fnet = tractive_force - fload
+        self.init_fnet.setValue(fnet)
+        
+        # Formula 12: init_vehicle_accel = fnet / mass (acceleration)
+        # Uses gvw (already retrieved) as total mass
+        vehicle_accel = fnet / gvw
+        self.init_vehicle_accel.setValue(vehicle_accel)
     
     def reset_ev_defaults(self):
         """Reset EV parameters to default values from EV_DEFAULTS constants"""
@@ -2729,6 +2914,9 @@ class EVSimulationApp(QMainWindow):
         self.ev_accel_end_speed_input.setValue(EV_DEFAULTS['accel_end_speed'])
         self.ev_accel_period_input.setValue(EV_DEFAULTS['accel_period'])
         self.ev_vehicle_range_input.setValue(EV_DEFAULTS['vehicle_range'])
+        
+        # Clear output area
+        self.output_text.clear()
         
         self.statusBar().showMessage('EV parameters reset to defaults')
     
@@ -2792,22 +2980,27 @@ class EVSimulationApp(QMainWindow):
         self.ugv_spin_angular_rad_input.setValue(UGV_DEFAULTS['spin_angular_rad'])
         self.ugv_spin_angular_deg_input.setValue(UGV_DEFAULTS['spin_angular_deg'])
         
+        # Clear output area
+        self.output_text.clear()
+        
         self.statusBar().showMessage('UGV parameters reset to defaults')
     
     def reset_simulation(self):
         """Reset simulation and parameters to defaults"""
-        self.engine.reset()
-        self.results_text.clear()
+        # Clear table data
+        if hasattr(self, 'graph_simulation_data'):
+            self.graph_simulation_data = []
+        
+        # Clear table widget
+        self.graph_data_table.setRowCount(0)
         
         # Reset simulation parameters to defaults
-        self.duration_input.setValue(90)
-        self.speed_input.setValue(150)  # High default for continuous acceleration
-        self.gradient_input.setValue(0)
-        self.mode_combo.setCurrentIndex(0)  # boost
+        self.gradient_input.setValue(GRAPH_SIM_DEFAULTS['gradient_deg'])
+        self.mode_combo.setCurrentIndex(0)  # boost (matches GRAPH_SIM_DEFAULTS['mode'])
         
         # Clear plots
         for canvas in [self.speed_canvas, self.power_canvas, 
-                      self.forces_canvas, self.motor_canvas, self.energy_canvas]:
+                      self.forces_canvas, self.motor_canvas]:
             canvas.fig.clear()
             canvas.draw()
         
