@@ -1,236 +1,327 @@
-# EV Simulation Analysis - Quick Start Guide
+# EV Power Train Simulation Tool
 
-## 📋 What's in this folder?
+## 📋 Overview
 
-This folder contains a complete analysis of the **GPM_Performance Analysis.xlsx** file, which includes Electric Vehicle (EV) performance simulation data for two different terrain scenarios.
-
----
-
-## 🚀 Quick Summary
-
-### Two Simulations Analyzed:
-
-1. **Flat Terrain (0° gradient)** - `m-LEV4000-37Nm-2000W`
-   - Max Speed: 55.42 km/h
-   - Energy: 49.92 Wh/km
-   - Max Acceleration: 8.56 m/s²
-   - Main resistance: Aerodynamic drag (81.6%)
-
-2. **Steep Climb (60° gradient)** - `VehicleSimulation - LEV6000 (2)`
-   - Max Speed: 55.42 km/h
-   - Energy: 398.35 Wh/km (8x higher!)
-   - Max Acceleration: 3.62 m/s²
-   - Main resistance: Climbing force (93.8%)
+A comprehensive **PyQt6-based desktop application** for simulating and analyzing Electric Vehicle (EV) and Unmanned Ground Vehicle (UGV) power train performance. Features real-time physics simulation, multi-graph visualization, and detailed output analysis.
 
 ---
 
-## 📁 Files Generated
+## 🚀 Key Features
 
-### 📊 Visualizations (PNG files)
-- **GPM_Analysis_m_LEV4000_37Nm_2000W.png** - 12 detailed charts for flat terrain
-- **GPM_Analysis_VehicleSimulation___LEV6000_(2).png** - 12 detailed charts for steep climb
-- **GPM_Comparison_All_Simulations.png** - Side-by-side comparison
+### Dual Vehicle Support
+- **EV Mode**: Full electric vehicle simulation with battery analysis
+- **UGV Mode**: Unmanned ground vehicle with specialized terrain capabilities
 
-### 📄 Data Files (CSV)
-- **GPM_Data_m_LEV4000_37Nm_2000W.csv** - Clean data for flat terrain (181 rows)
-- **GPM_Data_VehicleSimulation___LEV6000_(2).csv** - Clean data for steep climb (181 rows)
+### Real-Time Simulation
+- **120-second physics simulation** using iterative Euler integration
+- **241 data points** with 0.5-second time steps
+- **Verified calculation engine** with locked physics algorithms
 
-### 📖 Documentation
-- **ANALYSIS_SUMMARY.md** - Complete detailed analysis report
-- **README.md** - This file (quick start guide)
+### Multi-Graph Visualization (4 Tabs)
+1. **Speed Tab**: Vehicle speed progression (km/h) - Orange line
+2. **Power Tab**: Per-motor power consumption (Watts) - Orange line
+3. **Forces Tab**: 4-force analysis with color coding
+   - Tractive Force (Orange)
+   - Rolling Resistance (Blue)
+   - Drag Force (Yellow)
+   - Load Resistance (Gray)
+4. **Motor Tab**: Dual subplots
+   - Motor Speed (RPM) - Blue line
+   - Total Motor Torque (Nm) - Blue line
 
-### 🐍 Python Scripts
-- **comprehensive_analysis.py** - Main analysis script (run this to regenerate everything)
-- **analyze_excel.py** - Initial exploration script
-- **check_columns.py** - Column verification script
+### Output Value Simulation
+- Force calculations (Fdrag, Froll, Fclimb)
+- Acceleration analysis (Term1, Term2, Term3)
+- Battery capacity analysis
+- Vehicle range estimation
 
----
-
-## 🎯 Key Findings
-
-### 1. Energy Consumption Impact
-- **Flat terrain**: 49.92 Wh/km (excellent efficiency)
-- **60° climb**: 398.35 Wh/km (8x increase)
-- **Implication**: Battery range is drastically reduced on steep hills
-
-### 2. Performance Characteristics
-- Both scenarios reach the same max speed (55.42 km/h)
-- Acceleration is 57.7% lower on steep climbs
-- Motor operates at 22 kW max power in both cases
-
-### 3. Resistance Forces
-- **Flat**: 81.6% aerodynamic drag, 18.4% rolling resistance
-- **Climb**: 93.8% climbing force, 4.1% drag, 2.2% rolling
-
-### 4. Motor Specifications
-- 2 motors × 52 Nm = 104 Nm total torque
-- Max speed: 2746 RPM
-- Max power: 22 kW
-- Gear ratio: 5.221
-- Wheel radius: 0.2795 m
+### Data Export
+- **Excel export** with complete simulation data
+- **241 rows × 17 columns** per simulation
+- Single sheet: "Simulation Data"
 
 ---
 
-## 📊 How to View the Analysis
+## 🎯 Quick Start
 
-### Option 1: View the Visualizations
-Open any of the PNG files to see comprehensive charts showing:
-- Speed vs Time
-- Motor Speed vs Time
-- Motor Torque vs Time
-- Acceleration vs Time
-- Force Analysis
-- Resistance Breakdown
-- Power Consumption
-- Torque-Speed Characteristics
-- And more...
+### Installation
 
-### Option 2: Read the Summary
-Open **ANALYSIS_SUMMARY.md** for a complete written analysis with:
-- Detailed metrics for both simulations
-- Comparative analysis
-- Technical observations
-- Recommendations
+1. **Install Python 3.8+** (if not already installed)
 
-### Option 3: Explore the Data
-Open the CSV files in Excel or any spreadsheet software to:
-- See all 181 data points
-- Create custom charts
-- Perform your own analysis
-
-### Option 4: Re-run the Analysis
+2. **Install Dependencies**
 ```bash
-python comprehensive_analysis.py
+pip install PyQt6 matplotlib numpy pandas openpyxl
 ```
-This will regenerate all visualizations and CSV files.
+
+3. **Run the Application**
+```bash
+python main_app.py
+```
+
+### Basic Workflow
+
+1. **Select Vehicle Type**: Choose EV or UGV from dropdown
+2. **Set Parameters**: Adjust vehicle parameters in left panel
+3. **Configure Simulation**: Set gradient and mode (Eco/Boost)
+4. **Run Simulation**: Click "▶ Run Simulation" button
+5. **View Results**: Check all 4 graph tabs + data table
+6. **Export Data**: Click "💾 Export Results" for Excel file
 
 ---
 
-## 🔍 What Each Visualization Shows
+## 📁 Project Structure
 
-### Individual Simulation Charts (12 panels each)
-1. **Speed vs Time** - How vehicle speed changes
-2. **Motor Speed vs Time** - RPM progression
-3. **Motor Torque vs Time** - Torque demand
-4. **Acceleration vs Time** - Acceleration profile
-5. **Forces vs Time** - Tractive, resistance, and net forces
-6. **Resistance Forces** - Rolling, drag, and climbing forces
-7. **Motor Power vs Time** - Power consumption
-8. **Torque-Speed Characteristic** - Motor operating curve
-9. **Power vs Speed** - Power demand at different speeds
-10. **Resistance Breakdown** - Pie chart of resistance sources
-11. **Speed & Acceleration** - Combined view
-12. **Cumulative Energy** - Total energy consumed over time
+### Main Application
+- **main_app.py** - Main PyQt6 application (3,000+ lines)
+  - GUI layout and components
+  - Physics simulation engine
+  - Graph plotting with matplotlib
+  - Excel export functionality
 
-### Comparison Chart (4 panels)
-- Speed comparison between scenarios
-- Acceleration comparison
-- Motor torque comparison
-- Net force comparison
+### Documentation
+- **README.md** - This file (project overview)
+- **FORCES_TAB_UPDATE.md** - Forces tab implementation details
+- **POWER_TAB_UPDATE.md** - Power tab implementation details
+- **SPEED_TAB_UPDATE.md** - Speed tab implementation details
+- **UNIFIED_SIMULATION_WORKFLOW.md** - Workflow documentation
 
 ---
 
-## 💡 Insights for Design
+## 🔧 Technical Specifications
 
-### Battery Sizing
-- For flat terrain: ~50 Wh/km
-- For hilly terrain: ~400 Wh/km
-- Plan battery capacity based on expected terrain
+### Physics Engine
+- **Integration Method**: Iterative Euler integration
+- **Time Step**: 0.5 seconds (dt = 0.5)
+- **Duration**: 120 seconds total
+- **Data Points**: 241 rows (including t=0)
+- **Initial Conditions**: v₀ = 0 m/s (start from rest)
 
-### Motor Selection
-- Current 22 kW motor handles both scenarios
-- Torque is adequate for 60° climbs
-- Consider higher torque for better hill acceleration
+### Force Calculations
+```
+F_tractive = (Motor_Torque × Gear_Ratio) / Wheel_Radius
+F_roll = Cr × Mass × g
+F_drag = 0.5 × Cd × ρ × Area × v²
+F_climb = Mass × g × sin(gradient)
+F_net = F_tractive - (F_roll + F_drag + F_climb)
+a = F_net / Mass
+```
 
-### Aerodynamics
-- Critical on flat terrain (81.6% of resistance)
-- Less important on steep climbs (4.1% of resistance)
-- Optimize body shape for flat/highway driving
+### Motor Torque Curve
+```
+IF RPM ≤ Base_RPM:
+    Torque = Constant_Torque × Num_Motors
+ELSE:
+    Torque = (Power × 60) / (2π × RPM)
+```
 
-### Rolling Resistance
-- Minimal impact (2.2-18.4%)
-- Current tire selection is appropriate
-- Low-hanging fruit for efficiency gains
-
----
-
-## 📈 Data Structure
-
-Each CSV file contains these columns:
-- `Time` - Simulation time (seconds)
-- `Vehicle Speed (m/s)` - Speed in meters per second
-- `Vehicle Speed (Kmph)` - Speed in kilometers per hour
-- `Motor Speed (RPM)` - Motor rotational speed
-- `Gradient (Degree)` - Road gradient
-- `Mode, Eco-1, Boost-2` - Operating mode (2 = Boost)
-- `Total Motor Torque (Nm)` - Combined torque from all motors
-- `Total Number of Power Wheel (No)` - Number of driven wheels
-- `PerMotor Torque (Nm)` - Torque per motor
-- `Motoring Tractive Force F_Tractive (N)` - Forward driving force
-- `Froll (N)` - Rolling resistance force
-- `Fdrag (N)` - Aerodynamic drag force
-- `Fclimb (N)` - Climbing resistance force
-- `F_Load Resitance (N)` - Total resistance
-- `Net Force F_Net(N)` - Net accelerating force
-- `Vehicle Acceleration (m/s)` - Acceleration
-- `Motor Power (kW)` - Calculated motor power
-- `Total Power (kW)` - Total power (where applicable)
-
----
-
-## 🎓 Understanding the Results
-
-### Why is energy consumption 8x higher on climbs?
-- Gravity requires constant work to lift the vehicle
-- On a 60° slope, 93.8% of energy goes to fighting gravity
-- Aerodynamic drag becomes negligible on steep climbs
-
-### Why is acceleration lower on climbs?
-- Same motor power, but more force needed to overcome gravity
-- Net force (tractive - resistance) is lower
-- F = ma, so lower net force = lower acceleration
-
-### Why does drag decrease on climbs?
-- Vehicle speed is similar, but relative wind speed may differ
-- More importantly, drag becomes a smaller percentage of total resistance
-- Climbing force dominates the resistance profile
-
----
-
-## 🔧 Technical Specifications Extracted
-
-### Vehicle Parameters
+### Default EV Parameters
 - **Drag Coefficient (Cd)**: 0.8
-- **Rolling Resistance Coefficient (Cr)**: 0.02
-- **Air Density (ρ)**: 1.164 kg/m³
-- **Frontal Area (Af)**: 0.5 m²
+- **Rolling Resistance (Cr)**: 0.0214
+- **Vehicle Mass**: 160.4 kg
+- **Frontal Area**: 0.5 m²
 - **Wheel Radius**: 0.2795 m
-- **Gear Ratio**: 5.221
+- **Gear Ratio**: 5.268
+- **Motors**: 2 × 52 Nm (Boost mode)
+- **Max Power**: 22 kW (Boost) / 4 kW (Eco)
 
-### Motor System
-- **Number of Motors**: 2
-- **Max Torque per Motor**: 52 Nm
-- **Total Max Torque**: 104 Nm
-- **Max Power**: 22 kW
-- **Max RPM**: 2746
-
-### Operating Conditions
-- **Mode**: Boost (Mode 2)
-- **Simulation Time**: 90-180 seconds
-- **Target Speed**: 55.42 km/h
+### Default UGV Parameters
+- Similar to EV with additional tracked vehicle parameters
+- **Track Width**: 0.5 m
+- **Skid Coefficient**: 0.5
+- **Step Height**: 0.1 m
+- **Wheels**: 4 total, 4 powered
 
 ---
 
-## 📞 Questions?
+## 📊 Graph Tabs Explained
 
-For detailed technical analysis, see **ANALYSIS_SUMMARY.md**
+### 1. Speed Tab (Orange)
+- **X-axis**: Time (seconds, 0-120)
+- **Y-axis**: Vehicle Speed (km/h)
+- **Shows**: Acceleration from 0 to max speed
+- **Pattern**: S-curve (rapid acceleration → plateau)
 
-For visual insights, open the PNG files
+### 2. Power Tab (Orange)
+- **X-axis**: Time (seconds, 0-120)
+- **Y-axis**: Per-Motor Power (Watts)
+- **Shows**: Power consumption per motor
+- **Pattern**: Constant power region (Boost: 2000W per motor)
 
-For raw data exploration, use the CSV files
+### 3. Forces Tab (Multi-color)
+- **X-axis**: Time (seconds, 0-120)
+- **Y-axis**: Force (Newtons)
+- **4 Lines**:
+  - Orange: Tractive Force (decreases as speed increases)
+  - Blue: Rolling Resistance (constant ~31N)
+  - Yellow: Drag Force (increases with v²)
+  - Gray: Load Resistance (total resistance)
+
+### 4. Motor Tab (Blue, Dual Subplots)
+- **Top Plot**: Motor Speed (RPM)
+  - Shows RPM increase from 0 to ~4200 RPM
+  - Legend: lower right
+- **Bottom Plot**: Total Motor Torque (Nm)
+  - Shows torque decrease from ~74 Nm to ~9 Nm
+  - Legend: upper right
+  - **Pattern**: Inverse relationship (constant power = torque × RPM)
 
 ---
 
-*Analysis Date: October 29, 2025*
-*Source: GPM_Performance Analysis.xlsx*
-*Analysis Tool: Python (pandas, numpy, matplotlib, seaborn)*
+## 📊 Data Table (17 Columns)
+
+The simulation generates a complete data table with 241 rows:
+
+| Column Name | Unit | Description |
+|-------------|------|-------------|
+| Time | s | Simulation time (0-120 seconds) |
+| Vehicle Speed (m/s) | m/s | Speed in meters per second |
+| Vehicle Speed (Kmph) | km/h | Speed in kilometers per hour |
+| Motor Speed (RPM) | RPM | Motor rotational speed |
+| Gradient (Degree) | ° | Road gradient angle |
+| Mode, Eco-1, Boost-2 | - | Operating mode (1=Eco, 2=Boost) |
+| Total Motor Torque (Nm) | Nm | Combined torque from all motors |
+| Total Number of Power Wheel (No) | - | Number of driven wheels |
+| PerMotor Torque (Nm) | Nm | Torque per motor |
+| PerMotor Power (Watts) | W | Power per motor |
+| Motoring Tractive Force F_Tractive (N) | N | Forward driving force |
+| Froll (N) | N | Rolling resistance force |
+| Fdrag (N) | N | Aerodynamic drag force |
+| Fclimb (N) | N | Climbing resistance force |
+| F_Load Resitance (N) | N | Total resistance force |
+| Net Force F_Net (N) | N | Net accelerating force |
+| Vehicle Acceleration (m/s) | m/s² | Vehicle acceleration |
+
+---
+
+## 🎮 User Interface Layout
+
+### Left Panel: Vehicle Parameters
+- **Vehicle Type Selector**: EV / UGV dropdown
+- **Parameter Groups** (collapsible):
+  - Physical Parameters
+  - Drivetrain Parameters
+  - Weight Parameters
+  - Battery Parameters
+  - Performance Parameters
+  - UGV-Specific (tracked vehicles)
+- **Buttons**:
+  - 🔄 Reset to Default Values
+  - 💡 Compute Output Values
+
+### Right Panel: Output & Results
+- **Output Value Simulation Results** (top)
+  - Shows calculated forces, terms, and battery analysis
+  - Cleared when reset button is clicked
+
+### Bottom Panel: Simulation & Graphs
+- **Simulation Controls**:
+  - Gradient Input (degrees)
+  - Mode Selection (Eco / Boost)
+  - ▶ Run Simulation button
+  - 💾 Export Results button
+  - 🔄 Reset Simulation button
+- **Tab Widget**:
+  - Speed Tab (graph)
+  - Power Tab (graph)
+  - Forces Tab (graph)
+  - Motor Tab (graph)
+  - Data Table Tab (241 rows)
+
+---
+
+## 🎯 Key Use Cases
+
+### 1. Design Optimization
+- Adjust parameters (Cd, Cr, mass, etc.)
+- Run simulation to see impact
+- Compare results across configurations
+
+### 2. Performance Analysis
+- Test different gradients (flat, hills, steep)
+- Compare Eco vs Boost modes
+- Analyze force distribution
+
+### 3. Battery Sizing
+- Calculate required power for acceleration
+- Estimate battery capacity from drive cycles
+- Analyze energy consumption patterns
+
+### 4. Motor Selection
+- Verify torque requirements
+- Check RPM operating range
+- Validate power ratings
+
+### 5. Education & Training
+- Visualize physics concepts
+- Understand force interactions
+- Learn EV/UGV fundamentals
+
+---
+
+## 🔬 Recent Updates (Version 9.0)
+
+### Major Architectural Simplification (Nov 7, 2025)
+- ✅ **Removed simulation_engine.py** - Single source of truth
+- ✅ **Eliminated background threading** - Fast execution (<0.1s)
+- ✅ **Simplified export** - Single Excel sheet
+- ✅ **Unified simulation workflow** - Direct table generation
+- ✅ **Code reduction** - Removed ~497 lines
+
+### All Graph Tabs Unified (Nov 7, 2025)
+- ✅ **Speed Tab** - Updated to plot from Data Table
+- ✅ **Power Tab** - Updated to plot from Data Table
+- ✅ **Forces Tab** - Updated to plot from Data Table
+- ✅ **Motor Tab** - Updated to plot from Data Table (dual subplots)
+
+### UI Improvements
+- ✅ **Removed Results Summary panel** - Cleaner interface
+- ✅ **Removed Generate Graph Data button** - Automatic on simulation
+- ✅ **Output area clear on reset** - EV and UGV modes
+- ✅ **Unified export** - Single "Export Results" button
+
+---
+
+## 📚 Documentation Files
+
+- **FORCES_TAB_UPDATE.md** - Forces tab color coding and implementation
+- **POWER_TAB_UPDATE.md** - Power tab update details
+- **SPEED_TAB_DATA_SOURCE.md** - Speed tab data source verification
+- **SPEED_TAB_UPDATE.md** - Speed tab orange styling
+- **UNIFIED_SIMULATION_WORKFLOW.md** - Complete workflow documentation
+- **EXPORT_UNIFIED.md** - Export functionality details
+- **RESULTS_SUMMARY_REMOVED.md** - UI simplification notes
+
+---
+
+## 🛠️ Technology Stack
+
+- **Python 3.8+**
+- **PyQt6** - GUI framework
+- **Matplotlib** - Graph plotting
+- **NumPy** - Numerical computations
+- **Pandas** - Data handling
+- **OpenPyXL** - Excel export
+
+---
+
+## 📝 License & Credits
+
+**EV Power Train Simulation Tool**  
+Version 9.0 - Single Source of Truth Architecture  
+Last Updated: November 7, 2025
+
+Developed for electric vehicle and unmanned ground vehicle power train analysis and design optimization.
+
+---
+
+## 📞 Support
+
+For detailed documentation, see the markdown files in this directory.
+
+For physics algorithms, review the **locked code sections** in `main_app.py`.
+
+For technical issues, check the inline comments and docstrings.
+
+---
+
+*"Simplicity is the ultimate sophistication."* - Leonardo da Vinci
