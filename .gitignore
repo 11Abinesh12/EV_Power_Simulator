@@ -32,3 +32,6 @@ Docs/
 Excel_Analysis/
 Parameters/
 
+
+build/
+dist/

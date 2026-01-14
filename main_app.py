@@ -284,7 +284,56 @@ UGV_DEFAULTS['load_per_wheel'] = UGV_DEFAULTS['gvw'] / UGV_DEFAULTS['num_wheels'
 UGV_DEFAULTS['torque_climb'] = UGV_DEFAULTS['step_height'] * 9.81 * UGV_DEFAULTS['load_per_wheel']  # Nm
 UGV_DEFAULTS['spin_angular_deg'] = UGV_DEFAULTS['spin_angular_rad'] * 57.2958  # rad/s to deg/s
 
+# ========== GPM MOTOR SPECIFICATIONS (ePropelled Rhino Series) ==========
+GPM_MOTORS = {
+    'Default': {
+        'name': 'Default (Original)',
+        'continuous_power_w': 1000,     # Watts per motor (eco mode)
+        'peak_power_w': 2000,           # Watts per motor (boost mode)
+        'peak_torque_nm': 37,           # Nm per motor (boost constant torque)
+        'continuous_torque_nm': 19,     # Nm per motor (eco constant torque)
+        'base_rpm': 500,                # RPM threshold for constant torque region
+        'max_rpm': 7500,
+        'efficiency': 0.90,
+        'weight_kg': 0                  # No additional weight (already included)
+    },
+    'GPM35': {
+        'name': 'GPM35 (4kW/8kW)',
+        'continuous_power_w': 4000,     # Watts per motor
+        'peak_power_w': 8000,           # Watts per motor
+        'peak_torque_nm': 35,           # Nm per motor
+        'continuous_torque_nm': 17.5,   # Nm per motor (estimated: half of peak)
+        'base_rpm': 500,                # RPM threshold
+        'max_rpm': 7500,
+        'efficiency': 0.90,
+        'weight_kg': 13.5
+    },
+    'GPM50': {
+        'name': 'GPM50 (6kW/11kW)',
+        'continuous_power_w': 6000,
+        'peak_power_w': 11000,
+        'peak_torque_nm': 52,
+        'continuous_torque_nm': 26,     # Nm per motor (estimated)
+        'base_rpm': 500,
+        'max_rpm': 7500,
+        'efficiency': 0.90,
+        'weight_kg': 14.5
+    },
+    'GPM70': {
+        'name': 'GPM70 (8kW/16kW)',
+        'continuous_power_w': 8000,
+        'peak_power_w': 16000,
+        'peak_torque_nm': 70,
+        'continuous_torque_nm': 35,     # Nm per motor (estimated)
+        'base_rpm': 500,
+        'max_rpm': 7500,
+        'efficiency': 0.90,
+        'weight_kg': 18
+    }
+}
+
 # ========== GRAPH SIMULATION DEFAULT CONSTANTS ==========
+
 GRAPH_SIM_DEFAULTS = {
     # Simulation Environment Parameters
     'gradient_deg': 0.0,               # degrees - Road slope angle
@@ -531,6 +580,7 @@ class EVSimulationApp(QMainWindow):
         self.nav_tabs = QTabWidget()
         self.nav_tabs.addTab(QWidget(), 'Output Value Simulation')
         self.nav_tabs.addTab(QWidget(), 'Graph Simulation')
+        self.nav_tabs.addTab(QWidget(), 'Testing Point')
         self.nav_tabs.currentChanged.connect(self.on_nav_changed)
         self.nav_tabs.setMaximumHeight(40)
         main_layout.addWidget(self.nav_tabs)
@@ -552,6 +602,10 @@ class EVSimulationApp(QMainWindow):
         # Page 1: Graph visualization panel
         self.right_panel = self.create_visualization_panel()
         self.right_stack.addWidget(self.right_panel)
+        
+        # Page 2: Testing Point panel
+        self.testing_point_panel = self.create_testing_point_panel()
+        self.right_stack.addWidget(self.testing_point_panel)
         
         self.splitter.addWidget(self.right_stack)
         
@@ -583,6 +637,7 @@ class EVSimulationApp(QMainWindow):
             self.left_panel.setVisible(True)
             # Hide graph simulation controls
             self.graph_sim_params_group.setVisible(False)
+            self.runtime_params_group.setVisible(False)  # Hide runtime params in Output mode
             self.scenario_group.setVisible(False)
             self.btn_layout_widget.setVisible(False)
             # Show Vehicle Parameters for Output mode
@@ -601,15 +656,16 @@ class EVSimulationApp(QMainWindow):
             # Give space for comprehensive params
             try:
                 self.splitter.setSizes([400, 800])
-            except Exception:
+            except Exception:  
                 pass
             self.statusBar().showMessage('Output Value Simulation mode - Comprehensive Parameters')
-        else:  # Graph Simulation
+        elif index == 1:  # Graph Simulation
             # Show graphs with basic simulation controls on the left
             self.right_stack.setCurrentIndex(1)  # Graphs panel
             self.left_panel.setVisible(True)
             # Show only basic simulation controls for running simulations
             self.graph_sim_params_group.setVisible(True)
+            self.runtime_params_group.setVisible(True)  # Show runtime params in Graph mode
             self.scenario_group.setVisible(True)
             self.btn_layout_widget.setVisible(True)
             # Hide Vehicle Parameters and comprehensive EV/UGV params
@@ -623,6 +679,20 @@ class EVSimulationApp(QMainWindow):
             except Exception:
                 pass
             self.statusBar().showMessage('Graph Simulation mode')
+        else:  # Testing Point (index == 2)
+            # Show testing point panel - HIDE left panel completely for full width
+            self.right_stack.setCurrentIndex(2)  # Testing Point panel
+            self.left_panel.setVisible(False)  # Hide left panel to use full width
+            # Hide all controls (they're not needed in Testing Point mode)
+            self.graph_sim_params_group.setVisible(False)
+            self.runtime_params_group.setVisible(False)
+            self.scenario_group.setVisible(False)
+            self.btn_layout_widget.setVisible(False)
+            self.vehicle_group.setVisible(False)
+            self.ev_params_group.setVisible(False)
+            self.ugv_params_group.setVisible(False)
+            self.output_compute_btn.setVisible(False)
+            self.statusBar().showMessage('Testing Point mode')
     
     def on_vehicle_type_changed(self, vehicle_type: str):
         """Handle vehicle type selection change to show/hide appropriate parameter sections"""
@@ -636,6 +706,27 @@ class EVSimulationApp(QMainWindow):
             self.ugv_params_group.setVisible(True)
             self.reset_ugv_defaults()  # Load default values
             self.statusBar().showMessage('UGV parameters displayed')
+    
+    def on_motor_selection_changed(self, motor_key: str):
+        """Handle motor model selection change to show/hide custom fields and update calculations"""
+        is_custom = (motor_key == 'Customize')
+        
+        # Toggle visibility of custom motor input fields
+        self.custom_torque_label.setVisible(is_custom)
+        self.custom_peak_torque.setVisible(is_custom)
+        self.custom_power_label.setVisible(is_custom)
+        self.custom_peak_power.setVisible(is_custom)
+        
+        # Update calculated values based on selected motor
+        self.update_graph_sim_calculated_values()
+        
+        # Update status bar with motor info
+        if motor_key in GPM_MOTORS:
+            motor = GPM_MOTORS[motor_key]
+            self.statusBar().showMessage(f"Motor: {motor['name']} - Peak: {motor['peak_torque_nm']} Nm, {motor['peak_power_w']/1000:.0f} kW")
+        elif is_custom:
+            self.statusBar().showMessage('Custom motor mode - Enter peak torque and power values')
+
     
     def create_menu_bar(self):
         """Create menu bar with view options"""
@@ -691,6 +782,986 @@ class EVSimulationApp(QMainWindow):
         self.output_text.setReadOnly(True)
         v.addWidget(self.output_text)
         return panel
+    
+    def create_testing_point_panel(self):
+        """Create right-side panel for Testing Point - Motor Efficiency Map with Comprehensive Test Points"""
+        panel = QWidget()
+        main_layout = QVBoxLayout(panel)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+        
+        # Header
+        header = QLabel('Motor Efficiency Test Points')
+        header.setFont(QFont('Arial', 14, QFont.Weight.Bold))
+        header.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        main_layout.addWidget(header)
+        
+        # Description label
+        desc_label = QLabel('Enter 10 test points with vehicle parameters to analyze motor efficiency across different operating conditions.')
+        desc_label.setStyleSheet('color: #666; font-style: italic; margin-bottom: 5px;')
+        desc_label.setWordWrap(True)
+        main_layout.addWidget(desc_label)
+        
+        # Left side - Test Points Input Table (scrollable)
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_panel.setMinimumWidth(550)
+        
+        # Create table for test points with all parameters
+        self.test_points_table = QTableWidget()
+        self.test_points_table.setRowCount(10)
+        self.test_points_table.setColumnCount(11)  # Point #, RPM, Torque, GVW, Cd, Cr, Air Density, Frontal Area, Gear Ratio, Wheel Radius, Gradient
+        
+        # Set column headers
+        headers = ['Pt', 'RPM', 'Torque\n(Nm)', 'GVW\n(kg)', 'Cd', 'Cr', 'Air ρ\n(kg/m³)', 'Area\n(m²)', 'Gear\nRatio', 'Wheel R\n(m)', 'Grade\n(°)']
+        self.test_points_table.setHorizontalHeaderLabels(headers)
+        
+        # Make all columns stretch to fill available width
+        header = self.test_points_table.horizontalHeader()
+        from PyQt6.QtWidgets import QHeaderView
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        
+        # Store input widgets for each test point
+        self.test_point_inputs = []
+        
+        # Different default values for each of the 10 test points
+        # Varying RPM, Torque, Gradient and some vehicle parameters for diverse analysis
+        self.test_point_defaults = [
+            # Point 1: Low speed, low torque, flat road
+            {'rpm': 500, 'torque': 20, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 0.0},
+            
+            # Point 2: Medium speed, medium torque, flat road
+            {'rpm': 1500, 'torque': 50, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 0.0},
+            
+            # Point 3: Optimal efficiency zone (mid RPM, mid-high torque)
+            {'rpm': 2500, 'torque': 75, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 0.0},
+            
+            # Point 4: High torque climbing - gentle slope
+            {'rpm': 2000, 'torque': 100, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 5.0},
+            
+            # Point 5: High speed cruise
+            {'rpm': 4000, 'torque': 40, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 0.0},
+            
+            # Point 6: Steep climb - high torque
+            {'rpm': 1000, 'torque': 120, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 15.0},
+            
+            # Point 7: Highway speed
+            {'rpm': 5000, 'torque': 60, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 0.0},
+            
+            # Point 8: Very high speed
+            {'rpm': 7000, 'torque': 30, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 0.0},
+            
+            # Point 9: Heavy load condition
+            {'rpm': 3000, 'torque': 90, 'gvw': EV_DEFAULTS['gvw'] * 1.3, 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': 3.0},
+            
+            # Point 10: Downhill regeneration
+            {'rpm': 3500, 'torque': 25, 'gvw': EV_DEFAULTS['gvw'], 'cd': EV_DEFAULTS['cd'], 
+             'cr': EV_DEFAULTS['cr'], 'air_density': EV_DEFAULTS['air_density'], 
+             'frontal_area': EV_DEFAULTS['frontal_area'], 'gear_ratio': EV_DEFAULTS['gear_ratio'], 
+             'wheel_radius': EV_DEFAULTS['wheel_radius'], 'gradient': -5.0},
+        ]
+        
+        # Create input widgets for each row
+        for i in range(10):
+            row_inputs = {}
+            defaults = self.test_point_defaults[i]  # Get defaults for this specific test point
+            
+            # Point number (read-only label)
+            point_label = QTableWidgetItem(str(i + 1))
+            point_label.setFlags(point_label.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            point_label.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.test_points_table.setItem(i, 0, point_label)
+            
+            # RPM input
+            rpm_input = QDoubleSpinBox()
+            rpm_input.setRange(0, 10000)
+            rpm_input.setDecimals(0)
+            rpm_input.setSingleStep(100)
+            rpm_input.setValue(defaults['rpm'])
+            self.test_points_table.setCellWidget(i, 1, rpm_input)
+            row_inputs['rpm'] = rpm_input
+            
+            # Torque input
+            torque_input = QDoubleSpinBox()
+            torque_input.setRange(0, 200)
+            torque_input.setDecimals(1)
+            torque_input.setSingleStep(5)
+            torque_input.setValue(defaults['torque'])
+            self.test_points_table.setCellWidget(i, 2, torque_input)
+            row_inputs['torque'] = torque_input
+            
+            # GVW input
+            gvw_input = QDoubleSpinBox()
+            gvw_input.setRange(1, 10000)
+            gvw_input.setDecimals(1)
+            gvw_input.setSingleStep(10)
+            gvw_input.setValue(defaults['gvw'])
+            self.test_points_table.setCellWidget(i, 3, gvw_input)
+            row_inputs['gvw'] = gvw_input
+            
+            # Cd input
+            cd_input = QDoubleSpinBox()
+            cd_input.setRange(0.01, 2.0)
+            cd_input.setDecimals(3)
+            cd_input.setSingleStep(0.01)
+            cd_input.setValue(defaults['cd'])
+            self.test_points_table.setCellWidget(i, 4, cd_input)
+            row_inputs['cd'] = cd_input
+            
+            # Cr input
+            cr_input = QDoubleSpinBox()
+            cr_input.setRange(0.001, 0.5)
+            cr_input.setDecimals(4)
+            cr_input.setSingleStep(0.001)
+            cr_input.setValue(defaults['cr'])
+            self.test_points_table.setCellWidget(i, 5, cr_input)
+            row_inputs['cr'] = cr_input
+            
+            # Air Density input
+            air_density_input = QDoubleSpinBox()
+            air_density_input.setRange(0.5, 2.0)
+            air_density_input.setDecimals(3)
+            air_density_input.setSingleStep(0.01)
+            air_density_input.setValue(defaults['air_density'])
+            self.test_points_table.setCellWidget(i, 6, air_density_input)
+            row_inputs['air_density'] = air_density_input
+            
+            # Frontal Area input
+            frontal_area_input = QDoubleSpinBox()
+            frontal_area_input.setRange(0.1, 10.0)
+            frontal_area_input.setDecimals(2)
+            frontal_area_input.setSingleStep(0.1)
+            frontal_area_input.setValue(defaults['frontal_area'])
+            self.test_points_table.setCellWidget(i, 7, frontal_area_input)
+            row_inputs['frontal_area'] = frontal_area_input
+            
+            # Gear Ratio input
+            gear_ratio_input = QDoubleSpinBox()
+            gear_ratio_input.setRange(0.1, 50.0)
+            gear_ratio_input.setDecimals(3)
+            gear_ratio_input.setSingleStep(0.1)
+            gear_ratio_input.setValue(defaults['gear_ratio'])
+            self.test_points_table.setCellWidget(i, 8, gear_ratio_input)
+            row_inputs['gear_ratio'] = gear_ratio_input
+            
+            # Wheel Radius input
+            wheel_radius_input = QDoubleSpinBox()
+            wheel_radius_input.setRange(0.05, 1.0)
+            wheel_radius_input.setDecimals(4)
+            wheel_radius_input.setSingleStep(0.01)
+            wheel_radius_input.setValue(defaults['wheel_radius'])
+            self.test_points_table.setCellWidget(i, 9, wheel_radius_input)
+            row_inputs['wheel_radius'] = wheel_radius_input
+            
+            # Gradient input
+            gradient_input = QDoubleSpinBox()
+            gradient_input.setRange(-45, 45)
+            gradient_input.setDecimals(1)
+            gradient_input.setSingleStep(1)
+            gradient_input.setValue(defaults['gradient'])
+            self.test_points_table.setCellWidget(i, 10, gradient_input)
+            row_inputs['gradient'] = gradient_input
+            
+            self.test_point_inputs.append(row_inputs)
+        
+        # Set row height
+        for i in range(10):
+            self.test_points_table.setRowHeight(i, 35)
+        
+        # Enable scrolling
+        self.test_points_table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
+        self.test_points_table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
+        
+        left_layout.addWidget(self.test_points_table)
+        
+        # Buttons row
+        btn_layout = QHBoxLayout()
+        
+        # Plot button
+        self.plot_test_points_btn = QPushButton('📊 Plot Test Points')
+        self.plot_test_points_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        ''')
+        self.plot_test_points_btn.clicked.connect(self.plot_efficiency_test_points)
+        btn_layout.addWidget(self.plot_test_points_btn)
+        
+        # Reset to Defaults button
+        self.reset_test_points_btn = QPushButton('🔄 Reset to Defaults')
+        self.reset_test_points_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #1565C0;
+            }
+        ''')
+        self.reset_test_points_btn.clicked.connect(self.reset_test_points_to_defaults)
+        btn_layout.addWidget(self.reset_test_points_btn)
+        
+        # Clear button
+        self.clear_test_points_btn = QPushButton('🗑️ Clear All')
+        self.clear_test_points_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #da190b;
+            }
+            QPushButton:pressed {
+                background-color: #c41808;
+            }
+        ''')
+        self.clear_test_points_btn.clicked.connect(self.clear_test_points)
+        btn_layout.addWidget(self.clear_test_points_btn)
+        
+        btn_layout.addStretch()
+        left_layout.addLayout(btn_layout)
+        
+        # Top section - Table on left, Results on right (side by side)
+        top_splitter = QSplitter(Qt.Orientation.Horizontal)
+        top_splitter.addWidget(left_panel)
+        
+        # Right side - Results panel (at top, next to table)
+        results_panel = QWidget()
+        results_layout = QVBoxLayout(results_panel)
+        results_layout.setContentsMargins(5, 0, 0, 0)
+        results_layout.setSpacing(2)
+        results_panel.setMinimumWidth(250)  # Minimum width for results table
+        
+        # Results text area
+        results_label = QLabel('Test Point Results:')
+        results_label.setFont(QFont('Arial', 11, QFont.Weight.Bold))
+        results_layout.addWidget(results_label)
+        
+        self.testing_point_text = QTextEdit()
+        self.testing_point_text.setPlaceholderText('Results will be displayed here after plotting...')
+        self.testing_point_text.setReadOnly(True)
+        self.testing_point_text.document().setDocumentMargin(0)
+        self.testing_point_text.setViewportMargins(0, 0, 0, 0)
+        self.testing_point_text.setContentsMargins(0, 0, 0, 0)
+        self.testing_point_text.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.testing_point_text.setStyleSheet('''
+            QTextEdit {
+                background-color: white;
+                border: 1px solid #ddd;
+                padding: 0px;
+                margin: 0px;
+            }
+            QScrollBar:vertical {
+                width: 8px;
+                background: transparent;
+            }
+            QScrollBar::handle:vertical {
+                background: #ccc;
+                border-radius: 4px;
+            }
+        ''')
+        results_layout.addWidget(self.testing_point_text)
+        
+        top_splitter.addWidget(results_panel)
+        top_splitter.setSizes([750, 250])  # 3/4 for input table, 1/4 for results
+        
+        # Bottom section - Two graphs side by side with equal space
+        graphs_splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Left graph - Efficiency Map
+        efficiency_panel = QWidget()
+        efficiency_layout = QVBoxLayout(efficiency_panel)
+        efficiency_layout.setContentsMargins(0, 0, 5, 0)
+        
+        graph_header = QLabel('Efficiency in Torque-Speed Area')
+        graph_header.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+        graph_header.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        efficiency_layout.addWidget(graph_header)
+        
+        self.efficiency_canvas = PlotCanvas(efficiency_panel, width=5, height=4, dpi=100)
+        efficiency_layout.addWidget(self.efficiency_canvas)
+        
+        graphs_splitter.addWidget(efficiency_panel)
+        
+        # Right graph - Motor Suitability Analysis
+        motor_panel = QWidget()
+        motor_layout = QVBoxLayout(motor_panel)
+        motor_layout.setContentsMargins(5, 0, 0, 0)
+        
+        # Motor selection header row
+        motor_header_row = QHBoxLayout()
+        
+        motor_header = QLabel('Motor Suitability Analysis')
+        motor_header.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+        motor_header_row.addWidget(motor_header)
+        
+        motor_header_row.addStretch()
+        
+        motor_select_label = QLabel('Select Motor:')
+        motor_select_label.setFont(QFont('Arial', 10))
+        motor_header_row.addWidget(motor_select_label)
+        
+        self.motor_select_combo = QComboBox()
+        self.motor_select_combo.addItems(['GPM35', 'GPM50', 'GPM70'])
+        self.motor_select_combo.setCurrentIndex(0)
+        self.motor_select_combo.setMinimumWidth(100)
+        self.motor_select_combo.setStyleSheet('''
+            QComboBox {
+                padding: 5px 10px;
+                border: 2px solid #2196F3;
+                border-radius: 5px;
+                background-color: white;
+                color: black;
+                font-weight: bold;
+            }
+            QComboBox:hover {
+                border-color: #1976D2;
+            }
+            QComboBox QAbstractItemView {
+                background-color: white;
+                color: black;
+                selection-background-color: #2196F3;
+                selection-color: white;
+            }
+        ''')
+        self.motor_select_combo.currentTextChanged.connect(self.update_motor_suitability_plot)
+        motor_header_row.addWidget(self.motor_select_combo)
+        
+        motor_layout.addLayout(motor_header_row)
+        
+        # Motor suitability canvas
+        self.motor_suitability_canvas = PlotCanvas(motor_panel, width=5, height=4, dpi=100)
+        motor_layout.addWidget(self.motor_suitability_canvas)
+        
+        graphs_splitter.addWidget(motor_panel)
+        
+        # Set equal sizes for both graphs (50-50 split)
+        graphs_splitter.setSizes([500, 500])
+        
+        # Main vertical splitter - top section and graphs below
+        main_splitter = QSplitter(Qt.Orientation.Vertical)
+        main_splitter.addWidget(top_splitter)
+        main_splitter.addWidget(graphs_splitter)
+        main_splitter.setSizes([320, 380])
+        
+        main_layout.addWidget(main_splitter)
+        
+        # Initialize plots
+        self.plot_efficiency_map()
+        self.plot_motor_suitability()
+        
+        return panel
+    
+    def plot_motor_suitability(self, test_points=None):
+        """Plot motor operating envelope with test points to analyze suitability"""
+        import numpy as np
+        
+        self.motor_suitability_canvas.fig.clear()
+        ax = self.motor_suitability_canvas.fig.add_subplot(111)
+        
+        # Get selected motor
+        motor_key = self.motor_select_combo.currentText()
+        motor = GPM_MOTORS.get(motor_key, GPM_MOTORS['GPM35'])
+        
+        # Motor parameters
+        peak_torque = motor['peak_torque_nm']
+        continuous_torque = motor['continuous_torque_nm']
+        peak_power = motor['peak_power_w']
+        continuous_power = motor['continuous_power_w']
+        base_rpm = motor['base_rpm']
+        max_rpm = motor['max_rpm']
+        
+        # Create RPM range
+        rpm_range = np.linspace(0, max_rpm, 500)
+        
+        # Calculate torque curves (constant torque region + constant power region)
+        # Peak torque curve
+        peak_torque_curve = np.zeros_like(rpm_range)
+        for i, rpm in enumerate(rpm_range):
+            if rpm <= base_rpm:
+                peak_torque_curve[i] = peak_torque
+            else:
+                # Constant power region: P = T * omega, so T = P / omega
+                omega = rpm * 2 * np.pi / 60
+                peak_torque_curve[i] = min(peak_torque, peak_power / omega if omega > 0 else peak_torque)
+        
+        # Continuous torque curve
+        continuous_torque_curve = np.zeros_like(rpm_range)
+        for i, rpm in enumerate(rpm_range):
+            if rpm <= base_rpm:
+                continuous_torque_curve[i] = continuous_torque
+            else:
+                omega = rpm * 2 * np.pi / 60
+                continuous_torque_curve[i] = min(continuous_torque, continuous_power / omega if omega > 0 else continuous_torque)
+        
+        # Plot motor envelope
+        ax.fill_between(rpm_range, 0, continuous_torque_curve, alpha=0.3, color='green', label='Continuous Operation')
+        ax.fill_between(rpm_range, continuous_torque_curve, peak_torque_curve, alpha=0.3, color='orange', label='Peak/Boost Operation')
+        
+        ax.plot(rpm_range, peak_torque_curve, 'r-', linewidth=2, label=f'Peak Torque ({peak_torque} Nm)')
+        ax.plot(rpm_range, continuous_torque_curve, 'g-', linewidth=2, label=f'Continuous Torque ({continuous_torque} Nm)')
+        
+        # Plot test points if provided
+        suitable_count = 0
+        peak_only_count = 0
+        unsuitable_count = 0
+        
+        if test_points:
+            for p in test_points:
+                if p['rpm'] > 0 or p['torque'] > 0:
+                    rpm = p['rpm']
+                    torque = p['torque']
+                    point_num = p['point_num']
+                    
+                    # Determine suitability
+                    # Find the torque limits at this RPM
+                    if rpm <= base_rpm:
+                        peak_limit = peak_torque
+                        cont_limit = continuous_torque
+                    else:
+                        omega = rpm * 2 * np.pi / 60
+                        peak_limit = min(peak_torque, peak_power / omega if omega > 0 else peak_torque)
+                        cont_limit = min(continuous_torque, continuous_power / omega if omega > 0 else continuous_torque)
+                    
+                    # Check if within motor capability
+                    if torque <= cont_limit and rpm <= max_rpm:
+                        # Within continuous operation - GOOD
+                        color = 'green'
+                        marker = 'o'
+                        suitable_count += 1
+                    elif torque <= peak_limit and rpm <= max_rpm:
+                        # Within peak operation only - WARNING
+                        color = 'orange'
+                        marker = '^'
+                        peak_only_count += 1
+                    else:
+                        # Outside motor capability - BAD
+                        color = 'red'
+                        marker = 'x'
+                        unsuitable_count += 1
+                    
+                    # Only use edgecolors for filled markers (not 'x')
+                    if marker == 'x':
+                        ax.scatter(rpm, torque, c=color, s=120, marker=marker, 
+                                  linewidths=2, zorder=10)
+                    else:
+                        ax.scatter(rpm, torque, c=color, s=120, marker=marker, 
+                                  linewidths=2, zorder=10, edgecolors='black')
+                    
+                    ax.annotate(f'P{point_num}', (rpm, torque), textcoords="offset points", 
+                               xytext=(5, 5), fontsize=8, fontweight='bold',
+                               color='white', bbox=dict(boxstyle='round,pad=0.2', 
+                               facecolor=color, alpha=0.8))
+        
+        # Add suitability summary
+        summary_text = f'{motor_key}: '
+        if test_points:
+            total = suitable_count + peak_only_count + unsuitable_count
+            summary_text += f'✓ {suitable_count}/{total} Suitable'
+            if peak_only_count > 0:
+                summary_text += f', ⚠ {peak_only_count} Peak Only'
+            if unsuitable_count > 0:
+                summary_text += f', ✗ {unsuitable_count} Unsuitable'
+        else:
+            summary_text += 'Plot test points to analyze'
+        
+        ax.set_title(summary_text, fontsize=11, fontweight='bold')
+        ax.set_xlabel('Speed (rpm)', fontsize=10, fontweight='bold')
+        ax.set_ylabel('Torque (N.m)', fontsize=10, fontweight='bold')
+        ax.set_xlim(0, max_rpm)
+        ax.set_ylim(0, peak_torque * 1.2)
+        ax.legend(loc='upper right', fontsize=8)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        self.motor_suitability_canvas.fig.tight_layout()
+        self.motor_suitability_canvas.draw()
+    
+    def update_motor_suitability_plot(self):
+        """Update motor suitability plot when motor selection changes"""
+        # Get current test points if available
+        test_points = getattr(self, 'current_test_points', None)
+        self.plot_motor_suitability(test_points)
+    
+    def calculate_motor_efficiency(self, rpm, torque, params=None):
+        """
+        Calculate motor efficiency based on RPM, Torque and vehicle parameters.
+        This model accounts for vehicle-specific factors like GVW, resistance, and gradient.
+        """
+        import numpy as np
+        import math
+        
+        # Use default params if not provided
+        if params is None:
+            params = {
+                'gvw': EV_DEFAULTS['gvw'],
+                'cd': EV_DEFAULTS['cd'],
+                'cr': EV_DEFAULTS['cr'],
+                'air_density': EV_DEFAULTS['air_density'],
+                'frontal_area': EV_DEFAULTS['frontal_area'],
+                'gear_ratio': EV_DEFAULTS['gear_ratio'],
+                'wheel_radius': EV_DEFAULTS['wheel_radius'],
+                'gradient': 0.0
+            }
+        
+        # Motor efficiency model parameters (tuned to match reference image)
+        # Peak efficiency occurs around 2000-4000 RPM and 50-150 Nm
+        rpm_peak = 2500
+        torque_peak = 80
+        
+        # Efficiency calculation using Gaussian-like distribution
+        rpm_factor = np.exp(-((rpm - rpm_peak) ** 2) / (2 * 3000 ** 2))
+        torque_factor = np.exp(-((torque - torque_peak) ** 2) / (2 * 60 ** 2))
+        
+        # Base efficiency with combined factors
+        base_efficiency = 0.96 * rpm_factor * torque_factor
+        
+        # Add penalty for very low RPM and torque (motor losses)
+        low_rpm_penalty = np.exp(-(rpm / 500) ** 2) * 0.3
+        low_torque_penalty = np.exp(-(torque / 20) ** 2) * 0.2
+        
+        # Add penalty for very high RPM (windage losses)
+        high_rpm_penalty = np.exp(-((10000 - rpm) / 2000) ** 2) * 0.15 if rpm > 7000 else 0
+        
+        # Add penalty for very high torque at high RPM (thermal limits)
+        high_load_penalty = 0
+        if rpm > 5000 and torque > 100:
+            high_load_penalty = 0.3 * (rpm / 10000) * (torque / 200)
+        
+        # Vehicle-specific adjustments
+        # Heavy vehicles require more torque, affecting efficiency at low torque
+        gvw_factor = params['gvw'] / EV_DEFAULTS['gvw']
+        if gvw_factor > 1.5:
+            base_efficiency *= (1 - 0.02 * (gvw_factor - 1.5))
+        
+        # Gradient affects required torque
+        gradient_rad = math.radians(params['gradient'])
+        gradient_penalty = abs(math.sin(gradient_rad)) * 0.05
+        
+        # Aerodynamic drag penalty at high speed
+        drag_factor = params['cd'] * params['frontal_area'] * params['air_density']
+        drag_penalty = 0.02 * (drag_factor / (EV_DEFAULTS['cd'] * EV_DEFAULTS['frontal_area'] * EV_DEFAULTS['air_density']) - 1) if drag_factor > 0 else 0
+        drag_penalty = max(0, drag_penalty)
+        
+        # Calculate final efficiency
+        efficiency = max(0.0, base_efficiency - low_rpm_penalty - low_torque_penalty - 
+                        high_rpm_penalty - high_load_penalty - gradient_penalty - drag_penalty)
+        
+        # Scale to realistic efficiency range (0 to ~0.96)
+        efficiency = efficiency * 0.96 + 0.04 * (1 - low_rpm_penalty - low_torque_penalty)
+        efficiency = np.clip(efficiency, 0, 0.96)
+        
+        return efficiency
+    
+    def calculate_vehicle_forces(self, params, speed_kmh=0):
+        """Calculate vehicle forces based on parameters"""
+        import math
+        
+        # Convert speed to m/s
+        speed_ms = speed_kmh / 3.6
+        
+        # Rolling resistance force: Froll = Cr * m * g
+        f_roll = params['cr'] * params['gvw'] * 9.81
+        
+        # Aerodynamic drag force: Fdrag = 0.5 * Cd * ρ * A * v²
+        f_drag = 0.5 * params['cd'] * params['air_density'] * params['frontal_area'] * speed_ms ** 2
+        
+        # Grade resistance force: Fgrade = m * g * sin(θ)
+        gradient_rad = math.radians(params['gradient'])
+        f_grade = params['gvw'] * 9.81 * math.sin(gradient_rad)
+        
+        # Total resistance force
+        f_load = f_roll + f_drag + f_grade
+        
+        return {
+            'f_roll': f_roll,
+            'f_drag': f_drag,
+            'f_grade': f_grade,
+            'f_load': f_load
+        }
+    
+    def plot_efficiency_map(self, test_points=None):
+        """Plot the motor efficiency contour map with optional test points and hover tooltips"""
+        import numpy as np
+        
+        self.efficiency_canvas.fig.clear()
+        ax = self.efficiency_canvas.fig.add_subplot(111)
+        
+        # Store test points data for hover functionality
+        self.current_test_points = test_points
+        
+        # Create grid for contour plot
+        rpm_range = np.linspace(0, 10000, 150)
+        torque_range = np.linspace(0, 200, 150)
+        RPM, TORQUE = np.meshgrid(rpm_range, torque_range)
+        
+        # Calculate efficiency for each point (using default params for base map)
+        EFFICIENCY = np.zeros_like(RPM)
+        for i in range(RPM.shape[0]):
+            for j in range(RPM.shape[1]):
+                EFFICIENCY[i, j] = self.calculate_motor_efficiency(RPM[i, j], TORQUE[i, j])
+        
+        # Create contour plot with color map similar to reference
+        levels = np.linspace(0, 0.96, 12)
+        contour = ax.contourf(RPM, TORQUE, EFFICIENCY, levels=levels, cmap='jet', extend='both')
+        
+        # Add contour lines
+        contour_lines = ax.contour(RPM, TORQUE, EFFICIENCY, levels=levels, colors='black', linewidths=0.5, alpha=0.7)
+        ax.clabel(contour_lines, inline=True, fontsize=7, fmt='%.2f')
+        
+        # Add colorbar
+        cbar = self.efficiency_canvas.fig.colorbar(contour, ax=ax, label='Machine Efficiency', pad=0.02)
+        cbar.set_ticks(np.linspace(0, 0.96, 11))
+        cbar.set_ticklabels([f'{v:.2f}' for v in np.linspace(0, 0.96, 11)])
+        
+        # Store scatter points for hover detection
+        self.scatter_points = None
+        self.hover_annotation = None
+        
+        # Plot test points if provided
+        if test_points:
+            valid_points = [(p['rpm'], p['torque'], p['efficiency'], p['point_num']) 
+                           for p in test_points if p['rpm'] > 0 or p['torque'] > 0]
+            
+            if valid_points:
+                rpm_values = [p[0] for p in valid_points]
+                torque_values = [p[1] for p in valid_points]
+                efficiencies = [p[2] for p in valid_points]
+                point_nums = [p[3] for p in valid_points]
+                
+                # Plot test points with markers
+                self.scatter_points = ax.scatter(rpm_values, torque_values, c='black', s=120, marker='x', 
+                          linewidths=2.5, zorder=10, label='Test Points')
+                
+                # Store point data for hover
+                self.scatter_data = list(zip(rpm_values, torque_values, efficiencies, point_nums))
+                
+                # Add point labels
+                for rpm, torque, eff, point_num in valid_points:
+                    ax.annotate(f'P{point_num}', (rpm, torque), textcoords="offset points", 
+                               xytext=(5, 5), fontsize=8, fontweight='bold',
+                               color='white', bbox=dict(boxstyle='round,pad=0.2', 
+                               facecolor='black', alpha=0.8))
+                
+                ax.legend(loc='upper right', fontsize=9)
+                
+                # Create annotation for hover (initially hidden)
+                self.hover_annotation = ax.annotate("", xy=(0, 0), xytext=(20, 20),
+                    textcoords="offset points",
+                    bbox=dict(boxstyle="round,pad=0.5", fc="#FFFFE0", ec="black", alpha=0.95),
+                    arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+                    fontsize=10, fontweight='bold', zorder=20)
+                self.hover_annotation.set_visible(False)
+                
+                # Connect hover event
+                self.efficiency_canvas.mpl_connect("motion_notify_event", self.on_efficiency_hover)
+        
+        # Labels and title
+        ax.set_xlabel('Speed (rpm)', fontsize=11, fontweight='bold')
+        ax.set_ylabel('Mechanical Torque (N.m)', fontsize=11, fontweight='bold')
+        ax.set_title('Efficiency in Torque-Speed Area', fontsize=12, fontweight='bold')
+        
+        # Set axis limits
+        ax.set_xlim(0, 10000)
+        ax.set_ylim(0, 200)
+        
+        # Grid
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        self.efficiency_canvas.fig.tight_layout()
+        self.efficiency_canvas.draw()
+    
+    def on_efficiency_hover(self, event):
+        """Handle hover events on the efficiency map to show tooltips"""
+        if event.inaxes is None or self.scatter_points is None or not hasattr(self, 'scatter_data'):
+            return
+        
+        # Check if we're near any scatter point
+        if self.hover_annotation is None:
+            return
+            
+        visible = False
+        for rpm, torque, eff, point_num in self.scatter_data:
+            # Calculate distance from mouse to point (in data coordinates)
+            # Need to account for different axis scales
+            x_scale = 10000  # RPM range
+            y_scale = 200    # Torque range
+            
+            dx = (event.xdata - rpm) / x_scale
+            dy = (event.ydata - torque) / y_scale
+            distance = (dx**2 + dy**2)**0.5
+            
+            # If within threshold, show annotation
+            if distance < 0.03:  # ~3% of the plot size
+                self.hover_annotation.xy = (rpm, torque)
+                text = f"Point {point_num}\n─────────\nRPM: {rpm:,.0f}\nTorque: {torque:.1f} N.m\n★ Efficiency: {eff*100:.2f}%"
+                self.hover_annotation.set_text(text)
+                self.hover_annotation.set_visible(True)
+                visible = True
+                break
+        
+        if not visible:
+            self.hover_annotation.set_visible(False)
+        
+        self.efficiency_canvas.draw_idle()
+    
+    def plot_efficiency_test_points(self):
+        """Collect test point data with all parameters and plot on efficiency map"""
+        import numpy as np
+        
+        test_points = []
+        results_text = "═" * 80 + "\n"
+        results_text += "                    TEST POINT EFFICIENCY ANALYSIS RESULTS\n"
+        results_text += "═" * 80 + "\n\n"
+        
+        valid_points = 0
+        for i in range(10):
+            inputs = self.test_point_inputs[i]
+            
+            rpm = inputs['rpm'].value()
+            torque = inputs['torque'].value()
+            
+            if rpm > 0 or torque > 0:
+                # Get all parameters for this test point
+                params = {
+                    'gvw': inputs['gvw'].value(),
+                    'cd': inputs['cd'].value(),
+                    'cr': inputs['cr'].value(),
+                    'air_density': inputs['air_density'].value(),
+                    'frontal_area': inputs['frontal_area'].value(),
+                    'gear_ratio': inputs['gear_ratio'].value(),
+                    'wheel_radius': inputs['wheel_radius'].value(),
+                    'gradient': inputs['gradient'].value()
+                }
+                
+                # Calculate efficiency with vehicle parameters
+                efficiency = self.calculate_motor_efficiency(rpm, torque, params)
+                
+                # Calculate vehicle forces
+                forces = self.calculate_vehicle_forces(params)
+                
+                # Calculate vehicle speed from RPM
+                speed_kmh = (rpm * 2 * 3.14159 * params['wheel_radius'] * 60) / (params['gear_ratio'] * 1000)
+                
+                test_points.append({
+                    'point_num': i + 1,
+                    'rpm': rpm,
+                    'torque': torque,
+                    'efficiency': efficiency,
+                    'params': params,
+                    'forces': forces,
+                    'speed_kmh': speed_kmh
+                })
+                valid_points += 1
+        
+        if valid_points == 0:
+            QMessageBox.warning(self, 'No Test Points', 
+                               'Please enter at least one test point (RPM > 0 or Torque > 0) to plot.')
+            return
+        
+        # Create HTML formatted results for professional look
+        html_results = '''
+        <html><body style="margin:0; padding:0; font-family: Arial, sans-serif;">
+        <div style="background-color: #1976D2; color: white; padding: 8px; 
+                    text-align: center; font-size: 12px; font-weight: bold;">
+            MOTOR EFFICIENCY TEST RESULTS
+        </div>
+        <table style="width:100%; border-collapse: collapse; font-size: 11px; border: 1px solid #ccc; table-layout: fixed;">
+            <tr style="background-color: #E3F2FD;">
+                <th style="padding:6px; border:1px solid #ccc;">Pt</th>
+                <th style="padding:6px; border:1px solid #ccc;">RPM</th>
+                <th style="padding:6px; border:1px solid #ccc;">Torque</th>
+                <th style="padding:6px; border:1px solid #ccc;">Speed</th>
+                <th style="padding:6px; border:1px solid #ccc;">Grade</th>
+                <th style="padding:6px; border:1px solid #ccc;">Efficiency</th>
+            </tr>
+        '''
+        
+        for i, p in enumerate(test_points):
+            eff_pct = p['efficiency'] * 100
+            grade = p['params']['gradient']
+            grade_str = f"{grade:+.1f}°" if grade != 0 else "0°"
+            
+            # Row background color
+            row_bg = "#ffffff" if i % 2 == 0 else "#f8f9fa"
+            
+            # Efficiency color and style
+            if eff_pct >= 80:
+                eff_color = "#28a745"
+                eff_bg = "#d4edda"
+            elif eff_pct >= 50:
+                eff_color = "#fd7e14"
+                eff_bg = "#fff3cd"
+            else:
+                eff_color = "#dc3545"
+                eff_bg = "#f8d7da"
+            
+            html_results += f'''
+            <tr style="background-color: {row_bg};">
+                <td style="padding:6px; border:1px solid #ddd; text-align:center; font-weight:bold;">{p['point_num']}</td>
+                <td style="padding:6px; border:1px solid #ddd; text-align:right;">{p['rpm']:.0f}</td>
+                <td style="padding:6px; border:1px solid #ddd; text-align:right;">{p['torque']:.1f}</td>
+                <td style="padding:6px; border:1px solid #ddd; text-align:right;">{p['speed_kmh']:.1f}</td>
+                <td style="padding:6px; border:1px solid #ddd; text-align:center;">{grade_str}</td>
+                <td style="padding:6px; border:1px solid #ddd; text-align:center; background:{eff_bg}; color:{eff_color}; font-weight:bold;">{eff_pct:.1f}%</td>
+            </tr>
+            '''
+        
+        html_results += '</table>'
+        
+        # Calculate statistics
+        efficiencies = [p['efficiency'] for p in test_points]
+        avg_efficiency = np.mean(efficiencies)
+        
+        # Find best and worst points
+        best_point = max(test_points, key=lambda x: x['efficiency'])
+        worst_point = min(test_points, key=lambda x: x['efficiency'])
+        
+        html_results += f'''
+        <div style="margin-top:10px; padding:10px; background:#f5f5f5; border-radius:5px; border:1px solid #ddd;">
+            <div style="font-weight:bold; font-size:12px; margin-bottom:8px; color:#1976D2;">📊 SUMMARY</div>
+            <table style="width:100%; font-size:11px;">
+                <tr>
+                    <td style="padding:3px;">Total Points:</td>
+                    <td style="padding:3px; font-weight:bold;">{valid_points}</td>
+                </tr>
+                <tr>
+                    <td style="padding:3px;">Average:</td>
+                    <td style="padding:3px; font-weight:bold;">{avg_efficiency*100:.1f}%</td>
+                </tr>
+                <tr>
+                    <td style="padding:3px; color:#28a745;">✓ Best:</td>
+                    <td style="padding:3px; color:#28a745; font-weight:bold;">P{best_point['point_num']} ({best_point['efficiency']*100:.1f}%)</td>
+                </tr>
+                <tr>
+                    <td style="padding:3px; color:#dc3545;">✗ Worst:</td>
+                    <td style="padding:3px; color:#dc3545; font-weight:bold;">P{worst_point['point_num']} ({worst_point['efficiency']*100:.1f}%)</td>
+                </tr>
+            </table>
+        </div>
+        </body></html>
+        '''
+        
+        # Update results text with HTML
+        self.testing_point_text.setHtml(html_results)
+        
+        # Store test points for motor selection changes
+        self.current_test_points = test_points
+        
+        # Plot the efficiency map with test points
+        self.plot_efficiency_map(test_points=test_points)
+        
+        # Plot the motor suitability graph with test points
+        self.plot_motor_suitability(test_points=test_points)
+        
+        self.statusBar().showMessage(f'Plotted {valid_points} test points | Avg Efficiency: {avg_efficiency*100:.1f}%')
+    
+    def reset_test_points_to_defaults(self):
+        """Reset all test point parameters to their original default values and clear graphs"""
+        for i in range(10):
+            inputs = self.test_point_inputs[i]
+            defaults = self.test_point_defaults[i]
+            inputs['rpm'].setValue(defaults['rpm'])
+            inputs['torque'].setValue(defaults['torque'])
+            inputs['gvw'].setValue(defaults['gvw'])
+            inputs['cd'].setValue(defaults['cd'])
+            inputs['cr'].setValue(defaults['cr'])
+            inputs['air_density'].setValue(defaults['air_density'])
+            inputs['frontal_area'].setValue(defaults['frontal_area'])
+            inputs['gear_ratio'].setValue(defaults['gear_ratio'])
+            inputs['wheel_radius'].setValue(defaults['wheel_radius'])
+            inputs['gradient'].setValue(defaults['gradient'])
+        
+        # Clear test points data
+        self.current_test_points = None
+        
+        # Clear results text
+        self.testing_point_text.clear()
+        
+        # Reset graphs to initial state (no test points)
+        self.plot_efficiency_map()
+        self.plot_motor_suitability()
+        
+        self.statusBar().showMessage('All test points reset to original defaults')
+    
+    def clear_test_points(self):
+        """Clear all test point inputs and reset the graphs"""
+        for i in range(10):
+            inputs = self.test_point_inputs[i]
+            inputs['rpm'].setValue(0)
+            inputs['torque'].setValue(0)
+            inputs['gvw'].setValue(EV_DEFAULTS['gvw'])
+            inputs['cd'].setValue(EV_DEFAULTS['cd'])
+            inputs['cr'].setValue(EV_DEFAULTS['cr'])
+            inputs['air_density'].setValue(EV_DEFAULTS['air_density'])
+            inputs['frontal_area'].setValue(EV_DEFAULTS['frontal_area'])
+            inputs['gear_ratio'].setValue(EV_DEFAULTS['gear_ratio'])
+            inputs['wheel_radius'].setValue(EV_DEFAULTS['wheel_radius'])
+            inputs['gradient'].setValue(0.0)
+        
+        # Clear test points data
+        self.current_test_points = None
+        
+        # Clear results text
+        self.testing_point_text.clear()
+        
+        # Reset graphs to initial state (no test points)
+        self.plot_efficiency_map()
+        self.plot_motor_suitability()
+        
+        self.statusBar().showMessage('All test points cleared')
     
     def compute_output_values(self):
         """Process current inputs and show output values for selected vehicle type"""
@@ -1407,7 +2478,7 @@ class EVSimulationApp(QMainWindow):
         import numpy as np
         
         # Get simulation parameters
-        duration = GRAPH_SIM_DEFAULTS['duration']  # Fixed default: 120 seconds (2m)
+        duration = self.simulation_duration_input.value()  # User customizable duration
         gradient_deg = self.gradient_input.value()
         mode = self.mode_combo.currentText()
         
@@ -1432,9 +2503,11 @@ class EVSimulationApp(QMainWindow):
         mode_value = 2 if mode == 'boost' else 1
         mode_display = f'Eco-{mode_value}' if mode == 'eco' else f'Boost-{mode_value}'
         
-        # Generate time steps (every 0.5 seconds) starting from init_time
-        time_steps = np.arange(init_time, init_time + duration + 0.5, 0.5)
-        dt = 0.5  # Time step in seconds
+        # Get user-defined time step from input field
+        dt = self.time_step_input.value()  # Time step in seconds (user customizable)
+        
+        # Generate time steps starting from init_time
+        time_steps = np.arange(init_time, init_time + duration + dt, dt)
         
         # Prepare data storage
         data = []
@@ -1448,6 +2521,30 @@ class EVSimulationApp(QMainWindow):
         cd = EV_DEFAULTS['cd']
         air_density = EV_DEFAULTS['air_density']
         frontal_area = EV_DEFAULTS['frontal_area']
+        
+        # Get motor parameters from selection
+        motor_key = self.motor_combo.currentText()
+        if motor_key == 'Customize':
+            peak_torque = self.custom_peak_torque.value()
+            peak_power = self.custom_peak_power.value()
+            continuous_torque = peak_torque / 2
+            continuous_power = peak_power / 2
+            base_rpm = 500
+        else:
+            motor = GPM_MOTORS.get(motor_key, GPM_MOTORS['Default'])
+            peak_torque = motor['peak_torque_nm']
+            peak_power = motor['peak_power_w']
+            continuous_torque = motor['continuous_torque_nm']
+            continuous_power = motor['continuous_power_w']
+            base_rpm = motor['base_rpm']
+        
+        # Select torque/power based on mode
+        if mode == 'boost':
+            torque_per_motor = peak_torque
+            power_per_motor = peak_power
+        else:
+            torque_per_motor = continuous_torque
+            power_per_motor = continuous_power
         
         # ⚠️ LOCKED: Initialize state variables with initial values
         # These values are used for the first row (t=0) and updated iteratively
@@ -1479,17 +2576,15 @@ class EVSimulationApp(QMainWindow):
                 # Calculate Motor Speed (RPM) from current vehicle speed
                 motor_speed_rpm = (current_speed_kmh * gear_ratio) / (2 * 3.14159 * wheel_radius * 0.001 * 60)
                 
-                # Calculate Total Motor Torque based on mode and RPM
-                if mode == 'boost':
-                    if motor_speed_rpm < 500:
-                        total_motor_torque = 37 * 2  # Low RPM constant
-                    else:
-                        total_motor_torque = ((2000 * 60) / (2 * 3.14159 * motor_speed_rpm)) * 2
-                else:  # eco mode
-                    if motor_speed_rpm < 500:
-                        total_motor_torque = 19 * 2  # Low RPM constant
-                    else:
-                        total_motor_torque = ((1000 * 60) / (2 * 3.14159 * motor_speed_rpm)) * 2
+                # Calculate Total Motor Torque based on selected motor and RPM
+                # Constant torque below base RPM, constant power above
+                if motor_speed_rpm < base_rpm:
+                    torque = torque_per_motor  # Constant torque region
+                else:
+                    # Constant power region: T = (P × 60) / (2π × RPM)
+                    torque = (power_per_motor * 60) / (2 * 3.14159 * motor_speed_rpm)
+                
+                total_motor_torque = torque * init_num_power_wheels
                 
                 # Per motor calculations
                 per_motor_torque = total_motor_torque / init_num_power_wheels
@@ -1590,6 +2685,13 @@ class EVSimulationApp(QMainWindow):
         # Plot with orange line matching reference
         ax.plot(time, speed_kmh, color='orange', linewidth=2.5, label='Vehicle Speed (Kmph)')
         
+        # Set custom X-axis ticks based on user input
+        import numpy as np
+        xtick_interval = int(self.graph_xtick_interval.value())
+        max_time = max(time)
+        xticks = np.arange(0, max_time + xtick_interval, xtick_interval)
+        ax.set_xticks(xticks)
+        
         # Formatting to match reference
         ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
         ax.set_ylabel('Vehicle Speed (Kmph)', fontsize=10)
@@ -1619,6 +2721,13 @@ class EVSimulationApp(QMainWindow):
         
         # Plot with orange line matching reference
         ax.plot(time, power_watts, color='orange', linewidth=2.5, label='PerMotor Power (Watts)')
+        
+        # Set custom X-axis ticks based on user input
+        import numpy as np
+        xtick_interval = int(self.graph_xtick_interval.value())
+        max_time = max(time)
+        xticks = np.arange(0, max_time + xtick_interval, xtick_interval)
+        ax.set_xticks(xticks)
         
         # Formatting to match reference
         ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
@@ -1656,6 +2765,13 @@ class EVSimulationApp(QMainWindow):
         ax.plot(time, f_drag, color='yellow', linewidth=2.5, label='Fdrag (N)')
         ax.plot(time, f_load, color='gray', linewidth=2.5, label='F_Load Resistance (N)')
         
+        # Set custom X-axis ticks based on user input
+        import numpy as np
+        xtick_interval = int(self.graph_xtick_interval.value())
+        max_time = max(time)
+        xticks = np.arange(0, max_time + xtick_interval, xtick_interval)
+        ax.set_xticks(xticks)
+        
         # Formatting to match reference
         ax.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
         ax.set_ylabel('Force (N)', fontsize=10)
@@ -1684,9 +2800,16 @@ class EVSimulationApp(QMainWindow):
         # Clear and plot on motor canvas
         self.motor_canvas.fig.clear()
         
+        # Get X-axis tick settings
+        import numpy as np
+        xtick_interval = int(self.graph_xtick_interval.value())
+        max_time = max(time)
+        xticks = np.arange(0, max_time + xtick_interval, xtick_interval)
+        
         # Top subplot - Motor Speed (RPM)
         ax1 = self.motor_canvas.fig.add_subplot(211)
         ax1.plot(time, motor_rpm, color='blue', linewidth=2.5, label='Motor Speed (RPM)')
+        ax1.set_xticks(xticks)
         ax1.set_ylabel('Motor Speed (RPM)', fontsize=10)
         ax1.set_title('Motor Speed (RPM)', fontsize=12, fontweight='bold')
         ax1.legend(loc='lower right', fontsize=8)
@@ -1695,6 +2818,7 @@ class EVSimulationApp(QMainWindow):
         # Bottom subplot - Total Motor Torque (Nm)
         ax2 = self.motor_canvas.fig.add_subplot(212)
         ax2.plot(time, motor_torque, color='blue', linewidth=2.5, label='Total Motor Torque (Nm)')
+        ax2.set_xticks(xticks)
         ax2.set_xlabel('Time (Sec)', fontsize=10, fontweight='bold')
         ax2.set_ylabel('Total Motor Torque (Nm)', fontsize=10)
         ax2.set_title('Total Motor Torque (Nm)', fontsize=12, fontweight='bold')
@@ -1775,7 +2899,44 @@ class EVSimulationApp(QMainWindow):
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)
         
-        # Graph Simulation Initial Parameters (merged with Simulation Parameters)
+        # Runtime Parameters - Separate group for simulation control
+        self.runtime_params_group = QGroupBox('Runtime Parameters')
+        runtime_layout = QGridLayout()
+        
+        # Time Step (s) - User customizable
+        runtime_layout.addWidget(QLabel('Time Step (s):'), 0, 0)
+        self.time_step_input = QDoubleSpinBox()
+        self.time_step_input.setRange(0.01, 10.0)
+        self.time_step_input.setValue(0.5)  # Default 0.5 seconds
+        self.time_step_input.setDecimals(2)
+        self.time_step_input.setSingleStep(0.1)
+        self.time_step_input.setToolTip('Time step for simulation data (smaller = more data points, more accurate)')
+        runtime_layout.addWidget(self.time_step_input, 0, 1)
+        
+        # Graph X-Axis Tick Interval (s) - User customizable
+        runtime_layout.addWidget(QLabel('Graph X-Axis Interval (s):'), 1, 0)
+        self.graph_xtick_interval = QDoubleSpinBox()
+        self.graph_xtick_interval.setRange(1, 60)
+        self.graph_xtick_interval.setValue(5)  # Default 5 seconds (0, 5, 10, 15...)
+        self.graph_xtick_interval.setDecimals(0)
+        self.graph_xtick_interval.setSingleStep(5)
+        self.graph_xtick_interval.setToolTip('X-axis tick interval for graphs (e.g., 5 = 0, 5, 10, 15...)')
+        runtime_layout.addWidget(self.graph_xtick_interval, 1, 1)
+        
+        # Simulation Duration (s) - User customizable
+        runtime_layout.addWidget(QLabel('Simulation Duration (s):'), 2, 0)
+        self.simulation_duration_input = QDoubleSpinBox()
+        self.simulation_duration_input.setRange(10, 600)
+        self.simulation_duration_input.setValue(120)  # Default 120 seconds (2 minutes)
+        self.simulation_duration_input.setDecimals(0)
+        self.simulation_duration_input.setSingleStep(10)
+        self.simulation_duration_input.setToolTip('Total simulation duration in seconds (10-600)')
+        runtime_layout.addWidget(self.simulation_duration_input, 2, 1)
+        
+        self.runtime_params_group.setLayout(runtime_layout)
+        layout.addWidget(self.runtime_params_group)
+        
+        # Graph Simulation Initial Parameters
         self.graph_sim_params_group = QGroupBox('Graph Simulation Initial Parameters')
         graph_sim_layout = QGridLayout()
         
@@ -1794,27 +2955,62 @@ class EVSimulationApp(QMainWindow):
         self.mode_combo.currentTextChanged.connect(self.update_graph_sim_calculated_values)
         graph_sim_layout.addWidget(self.mode_combo, 1, 1)
         
+        # Motor Model Selection
+        graph_sim_layout.addWidget(QLabel('Motor Model:'), 2, 0)
+        self.motor_combo = QComboBox()
+        self.motor_combo.addItems(['Default', 'GPM35', 'GPM50', 'GPM70', 'Customize'])
+        self.motor_combo.currentTextChanged.connect(self.on_motor_selection_changed)
+        graph_sim_layout.addWidget(self.motor_combo, 2, 1)
+        
+        # Custom Motor Parameters (hidden by default, shown when "Customize" is selected)
+        graph_sim_layout.addWidget(QLabel('Custom Peak Torque (Nm):'), 3, 0)
+        self.custom_peak_torque = QDoubleSpinBox()
+        self.custom_peak_torque.setRange(1, 500)
+        self.custom_peak_torque.setValue(37)
+        self.custom_peak_torque.setDecimals(1)
+        self.custom_peak_torque.valueChanged.connect(self.update_graph_sim_calculated_values)
+        graph_sim_layout.addWidget(self.custom_peak_torque, 3, 1)
+        
+        graph_sim_layout.addWidget(QLabel('Custom Peak Power (W):'), 4, 0)
+        self.custom_peak_power = QDoubleSpinBox()
+        self.custom_peak_power.setRange(100, 50000)
+        self.custom_peak_power.setValue(2000)
+        self.custom_peak_power.setDecimals(0)
+        self.custom_peak_power.valueChanged.connect(self.update_graph_sim_calculated_values)
+        graph_sim_layout.addWidget(self.custom_peak_power, 4, 1)
+        
+        # Store references for visibility toggle
+        self.custom_torque_label = graph_sim_layout.itemAtPosition(3, 0).widget()
+        self.custom_power_label = graph_sim_layout.itemAtPosition(4, 0).widget()
+        
+        # Hide custom fields by default
+        self.custom_torque_label.setVisible(False)
+        self.custom_peak_torque.setVisible(False)
+        self.custom_power_label.setVisible(False)
+        self.custom_peak_power.setVisible(False)
+        
         # Time (s)
-        graph_sim_layout.addWidget(QLabel('Time (s):'), 2, 0)
+        graph_sim_layout.addWidget(QLabel('Time (s):'), 5, 0)
         self.init_time = QDoubleSpinBox()
         self.init_time.setRange(0, 1000)
         self.init_time.setValue(GRAPH_SIM_DEFAULTS['init_time'])
         self.init_time.setDecimals(1)
         self.init_time.setSingleStep(0.5)
-        graph_sim_layout.addWidget(self.init_time, 2, 1)
+        graph_sim_layout.addWidget(self.init_time, 5, 1)
+
         
         # Initial Vehicle Speed (m/s) - BASE VALUE (controls calculated fields)
-        graph_sim_layout.addWidget(QLabel('Initial Vehicle Speed (m/s):'), 3, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Vehicle Speed (m/s):'), 6, 0)
         self.init_vehicle_speed_ms = QDoubleSpinBox()
         self.init_vehicle_speed_ms.setRange(0, 100)
         self.init_vehicle_speed_ms.setValue(GRAPH_SIM_DEFAULTS['init_vehicle_speed_ms'])
         self.init_vehicle_speed_ms.setDecimals(3)
         self.init_vehicle_speed_ms.setSingleStep(0.1)
         self.init_vehicle_speed_ms.valueChanged.connect(self.update_graph_sim_calculated_values)
-        graph_sim_layout.addWidget(self.init_vehicle_speed_ms, 3, 1)
+        graph_sim_layout.addWidget(self.init_vehicle_speed_ms, 6, 1)
         
         # Initial Motor Speed (RPM) - CALCULATED from vehicle speed and gear ratio
-        graph_sim_layout.addWidget(QLabel('Initial Motor Speed (RPM):'), 4, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Motor Speed (RPM):'), 7, 0)
         self.init_motor_speed_rpm = QDoubleSpinBox()
         self.init_motor_speed_rpm.setRange(0, 10000)
         self.init_motor_speed_rpm.setValue(GRAPH_SIM_DEFAULTS['init_motor_speed_rpm'])
@@ -1822,18 +3018,18 @@ class EVSimulationApp(QMainWindow):
         self.init_motor_speed_rpm.setSingleStep(10)
         self.init_motor_speed_rpm.setReadOnly(True)
         self.init_motor_speed_rpm.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_motor_speed_rpm, 4, 1)
+        graph_sim_layout.addWidget(self.init_motor_speed_rpm, 7, 1)
         
         # Total Number of Power Wheel Motors
-        graph_sim_layout.addWidget(QLabel('Number of Power Wheels:'), 5, 0)
+        graph_sim_layout.addWidget(QLabel('Number of Power Wheels:'), 8, 0)
         self.init_num_power_wheels = QSpinBox()
         self.init_num_power_wheels.setRange(1, 8)
         self.init_num_power_wheels.setValue(GRAPH_SIM_DEFAULTS['init_num_power_wheels'])
         self.init_num_power_wheels.valueChanged.connect(self.update_graph_sim_calculated_values)
-        graph_sim_layout.addWidget(self.init_num_power_wheels, 5, 1)
+        graph_sim_layout.addWidget(self.init_num_power_wheels, 8, 1)
         
         # Initial Total Motor Torque (Nm) - CALCULATED from mode and motor RPM
-        graph_sim_layout.addWidget(QLabel('Initial Total Motor Torque (Nm):'), 6, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Total Motor Torque (Nm):'), 9, 0)
         self.init_total_motor_torque = QDoubleSpinBox()
         self.init_total_motor_torque.setRange(0, 10000)
         self.init_total_motor_torque.setValue(GRAPH_SIM_DEFAULTS['init_total_motor_torque'])
@@ -1841,10 +3037,10 @@ class EVSimulationApp(QMainWindow):
         self.init_total_motor_torque.setSingleStep(1)
         self.init_total_motor_torque.setReadOnly(True)
         self.init_total_motor_torque.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_total_motor_torque, 6, 1)
+        graph_sim_layout.addWidget(self.init_total_motor_torque, 9, 1)
         
         # Initial PerMotor Power (Watts) - CALCULATED from motor RPM and per-motor torque
-        graph_sim_layout.addWidget(QLabel('Initial PerMotor Power (W):'), 7, 0)
+        graph_sim_layout.addWidget(QLabel('Initial PerMotor Power (W):'), 10, 0)
         self.init_per_motor_power = QDoubleSpinBox()
         self.init_per_motor_power.setRange(0, 50000)
         self.init_per_motor_power.setValue(GRAPH_SIM_DEFAULTS['init_per_motor_power'])
@@ -1852,10 +3048,10 @@ class EVSimulationApp(QMainWindow):
         self.init_per_motor_power.setSingleStep(100)
         self.init_per_motor_power.setReadOnly(True)
         self.init_per_motor_power.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_per_motor_power, 7, 1)
+        graph_sim_layout.addWidget(self.init_per_motor_power, 10, 1)
         
         # Initial Tractive Force (N) - CALCULATED from total torque, gear efficiency, gear ratio, wheel radius
-        graph_sim_layout.addWidget(QLabel('Initial Tractive Force (N):'), 8, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Tractive Force (N):'), 11, 0)
         self.init_tractive_force = QDoubleSpinBox()
         self.init_tractive_force.setRange(0, 10000)
         self.init_tractive_force.setValue(GRAPH_SIM_DEFAULTS['init_tractive_force'])
@@ -1863,10 +3059,10 @@ class EVSimulationApp(QMainWindow):
         self.init_tractive_force.setSingleStep(10)
         self.init_tractive_force.setReadOnly(True)
         self.init_tractive_force.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_tractive_force, 8, 1)
+        graph_sim_layout.addWidget(self.init_tractive_force, 11, 1)
         
         # Initial Froll (N) - CALCULATED from rolling resistance (cr × mass × g)
-        graph_sim_layout.addWidget(QLabel('Initial Froll (N):'), 9, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Froll (N):'), 12, 0)
         self.init_froll = QDoubleSpinBox()
         self.init_froll.setRange(0, 5000)
         self.init_froll.setValue(GRAPH_SIM_DEFAULTS['init_froll'])
@@ -1874,10 +3070,10 @@ class EVSimulationApp(QMainWindow):
         self.init_froll.setSingleStep(1)
         self.init_froll.setReadOnly(True)
         self.init_froll.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_froll, 9, 1)
+        graph_sim_layout.addWidget(self.init_froll, 12, 1)
         
         # Initial Fdrag (N) - CALCULATED from aerodynamic drag (cd × ρ × A × v²)
-        graph_sim_layout.addWidget(QLabel('Initial Fdrag (N):'), 10, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Fdrag (N):'), 13, 0)
         self.init_fdrag = QDoubleSpinBox()
         self.init_fdrag.setRange(0, 5000)
         self.init_fdrag.setValue(GRAPH_SIM_DEFAULTS['init_fdrag'])
@@ -1885,10 +3081,10 @@ class EVSimulationApp(QMainWindow):
         self.init_fdrag.setSingleStep(1)
         self.init_fdrag.setReadOnly(True)
         self.init_fdrag.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_fdrag, 10, 1)
+        graph_sim_layout.addWidget(self.init_fdrag, 13, 1)
         
         # Initial Fclimb (N) - CALCULATED from climbing force (mass × g × sin(gradient))
-        graph_sim_layout.addWidget(QLabel('Initial Fclimb (N):'), 11, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Fclimb (N):'), 14, 0)
         self.init_fclimb = QDoubleSpinBox()
         self.init_fclimb.setRange(0, 5000)
         self.init_fclimb.setValue(GRAPH_SIM_DEFAULTS['init_fclimb'])
@@ -1896,10 +3092,10 @@ class EVSimulationApp(QMainWindow):
         self.init_fclimb.setSingleStep(1)
         self.init_fclimb.setReadOnly(True)
         self.init_fclimb.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_fclimb, 11, 1)
+        graph_sim_layout.addWidget(self.init_fclimb, 14, 1)
         
         # Initial Vehicle Speed (Kmph) - CALCULATED from m/s
-        graph_sim_layout.addWidget(QLabel('Initial Vehicle Speed (Kmph):'), 12, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Vehicle Speed (Kmph):'), 15, 0)
         self.init_vehicle_speed_kmph = QDoubleSpinBox()
         self.init_vehicle_speed_kmph.setRange(0, 300)
         self.init_vehicle_speed_kmph.setValue(GRAPH_SIM_DEFAULTS['init_vehicle_speed_kmph'])
@@ -1907,10 +3103,10 @@ class EVSimulationApp(QMainWindow):
         self.init_vehicle_speed_kmph.setSingleStep(1)
         self.init_vehicle_speed_kmph.setReadOnly(True)
         self.init_vehicle_speed_kmph.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_vehicle_speed_kmph, 12, 1)
+        graph_sim_layout.addWidget(self.init_vehicle_speed_kmph, 15, 1)
         
         # Initial PerMotor Torque (Nm) - CALCULATED from total torque and number of wheels
-        graph_sim_layout.addWidget(QLabel('Initial PerMotor Torque (Nm):'), 13, 0)
+        graph_sim_layout.addWidget(QLabel('Initial PerMotor Torque (Nm):'), 16, 0)
         self.init_per_motor_torque = QDoubleSpinBox()
         self.init_per_motor_torque.setRange(0, 10000)
         self.init_per_motor_torque.setValue(GRAPH_SIM_DEFAULTS['init_per_motor_torque'])
@@ -1918,10 +3114,10 @@ class EVSimulationApp(QMainWindow):
         self.init_per_motor_torque.setSingleStep(1)
         self.init_per_motor_torque.setReadOnly(True)
         self.init_per_motor_torque.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_per_motor_torque, 13, 1)
+        graph_sim_layout.addWidget(self.init_per_motor_torque, 16, 1)
         
         # Initial F_Load Resistance (N) - CALCULATED from froll + fdrag + fclimb
-        graph_sim_layout.addWidget(QLabel('Initial F_Load Resistance (N):'), 14, 0)
+        graph_sim_layout.addWidget(QLabel('Initial F_Load Resistance (N):'), 17, 0)
         self.init_fload = QDoubleSpinBox()
         self.init_fload.setRange(0, 10000)
         self.init_fload.setValue(GRAPH_SIM_DEFAULTS['init_fload'])
@@ -1929,10 +3125,10 @@ class EVSimulationApp(QMainWindow):
         self.init_fload.setSingleStep(1)
         self.init_fload.setReadOnly(True)
         self.init_fload.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_fload, 14, 1)
+        graph_sim_layout.addWidget(self.init_fload, 17, 1)
         
         # Initial Net Force F_Net (N) - CALCULATED from tractive force - load resistance
-        graph_sim_layout.addWidget(QLabel('Initial Net Force F_Net (N):'), 15, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Net Force F_Net (N):'), 18, 0)
         self.init_fnet = QDoubleSpinBox()
         self.init_fnet.setRange(-10000, 10000)
         self.init_fnet.setValue(GRAPH_SIM_DEFAULTS['init_fnet'])
@@ -1940,10 +3136,10 @@ class EVSimulationApp(QMainWindow):
         self.init_fnet.setSingleStep(1)
         self.init_fnet.setReadOnly(True)
         self.init_fnet.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_fnet, 15, 1)
+        graph_sim_layout.addWidget(self.init_fnet, 18, 1)
         
         # Initial Vehicle Acceleration (m/s²) - CALCULATED from net force / mass
-        graph_sim_layout.addWidget(QLabel('Initial Acceleration (m/s²):'), 16, 0)
+        graph_sim_layout.addWidget(QLabel('Initial Acceleration (m/s²):'), 19, 0)
         self.init_vehicle_accel = QDoubleSpinBox()
         self.init_vehicle_accel.setRange(-10, 10)
         self.init_vehicle_accel.setValue(GRAPH_SIM_DEFAULTS['init_vehicle_accel'])
@@ -1951,7 +3147,7 @@ class EVSimulationApp(QMainWindow):
         self.init_vehicle_accel.setSingleStep(0.1)
         self.init_vehicle_accel.setReadOnly(True)
         self.init_vehicle_accel.setStyleSheet("QDoubleSpinBox { background-color: #f0f0f0; }")
-        graph_sim_layout.addWidget(self.init_vehicle_accel, 16, 1)
+        graph_sim_layout.addWidget(self.init_vehicle_accel, 19, 1)
         
         self.graph_sim_params_group.setLayout(graph_sim_layout)
         layout.addWidget(self.graph_sim_params_group)
@@ -2283,7 +3479,11 @@ class EVSimulationApp(QMainWindow):
         
         # Reset to Defaults button for EV
         ev_reset_btn = QPushButton('🔄 Reset to Default Values')
-        ev_reset_btn.setStyleSheet('background-color: #FF5722; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 5px;')
+        ev_reset_btn.setStyleSheet('''
+            QPushButton { background-color: #FF5722; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 5px; }
+            QPushButton:hover { background-color: #E64A19; }
+            QPushButton:pressed { background-color: #BF360C; }
+        ''')
         ev_reset_btn.clicked.connect(self.reset_ev_defaults)
         ev_main_layout.addWidget(ev_reset_btn)
         
@@ -2692,7 +3892,11 @@ class EVSimulationApp(QMainWindow):
         
         # Reset to Defaults button for UGV
         ugv_reset_btn = QPushButton('🔄 Reset to Default Values')
-        ugv_reset_btn.setStyleSheet('background-color: #FF5722; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 5px;')
+        ugv_reset_btn.setStyleSheet('''
+            QPushButton { background-color: #FF5722; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 5px; }
+            QPushButton:hover { background-color: #E64A19; }
+            QPushButton:pressed { background-color: #BF360C; }
+        ''')
         ugv_reset_btn.clicked.connect(self.reset_ugv_defaults)
         ugv_main_layout.addWidget(ugv_reset_btn)
         
@@ -2707,25 +3911,60 @@ class EVSimulationApp(QMainWindow):
         self.scenario_group = QGroupBox('Quick Scenarios')
         scenario_layout = QVBoxLayout()
         
-        flat_btn = QPushButton('Flat Terrain (0°)')
-        flat_btn.setStyleSheet('padding: 6px; background-color: #E3F2FD; border: 1px solid #90CAF9; border-radius: 3px;')
-        flat_btn.clicked.connect(lambda: self.load_scenario('flat'))
-        scenario_layout.addWidget(flat_btn)
+        # Create button group for exclusive selection (only one scenario active at a time)
+        from PyQt6.QtWidgets import QButtonGroup
+        self.scenario_btn_group = QButtonGroup(self)
+        self.scenario_btn_group.setExclusive(True)
         
-        gentle_btn = QPushButton('Gentle Slope (7°)')
-        gentle_btn.setStyleSheet('padding: 6px; background-color: #E8F5E9; border: 1px solid #A5D6A7; border-radius: 3px;')
-        gentle_btn.clicked.connect(lambda: self.load_scenario('gentle'))
-        scenario_layout.addWidget(gentle_btn)
+        # Base style for scenario buttons (OFF state)
+        flat_off_style = '''
+            QPushButton { padding: 6px; background-color: #E3F2FD; border: 2px solid #90CAF9; border-radius: 3px; }
+            QPushButton:hover { background-color: #BBDEFB; }
+            QPushButton:checked { background-color: #1565C0; color: white; border: 2px solid #0D47A1; font-weight: bold; }
+        '''
+        gentle_off_style = '''
+            QPushButton { padding: 6px; background-color: #E8F5E9; border: 2px solid #A5D6A7; border-radius: 3px; }
+            QPushButton:hover { background-color: #C8E6C9; }
+            QPushButton:checked { background-color: #2E7D32; color: white; border: 2px solid #1B5E20; font-weight: bold; }
+        '''
+        hill_off_style = '''
+            QPushButton { padding: 6px; background-color: #FFF3E0; border: 2px solid #FFCC80; border-radius: 3px; }
+            QPushButton:hover { background-color: #FFE0B2; }
+            QPushButton:checked { background-color: #EF6C00; color: white; border: 2px solid #E65100; font-weight: bold; }
+        '''
+        steep_off_style = '''
+            QPushButton { padding: 6px; background-color: #FFEBEE; border: 2px solid #FFAB91; border-radius: 3px; }
+            QPushButton:hover { background-color: #FFCDD2; }
+            QPushButton:checked { background-color: #C62828; color: white; border: 2px solid #B71C1C; font-weight: bold; }
+        '''
         
-        hill_btn = QPushButton('Moderate Hill (15°)')
-        hill_btn.setStyleSheet('padding: 6px; background-color: #FFF3E0; border: 1px solid #FFCC80; border-radius: 3px;')
-        hill_btn.clicked.connect(lambda: self.load_scenario('hill'))
-        scenario_layout.addWidget(hill_btn)
+        self.flat_btn = QPushButton('Flat Terrain (0°)')
+        self.flat_btn.setCheckable(True)
+        self.flat_btn.setStyleSheet(flat_off_style)
+        self.flat_btn.clicked.connect(lambda: self.load_scenario('flat'))
+        self.scenario_btn_group.addButton(self.flat_btn)
+        scenario_layout.addWidget(self.flat_btn)
         
-        steep_btn = QPushButton('Steep Climb (30°)')
-        steep_btn.setStyleSheet('padding: 6px; background-color: #FFEBEE; border: 1px solid #FFAB91; border-radius: 3px;')
-        steep_btn.clicked.connect(lambda: self.load_scenario('steep'))
-        scenario_layout.addWidget(steep_btn)
+        self.gentle_btn = QPushButton('Gentle Slope (7°)')
+        self.gentle_btn.setCheckable(True)
+        self.gentle_btn.setStyleSheet(gentle_off_style)
+        self.gentle_btn.clicked.connect(lambda: self.load_scenario('gentle'))
+        self.scenario_btn_group.addButton(self.gentle_btn)
+        scenario_layout.addWidget(self.gentle_btn)
+        
+        self.hill_btn = QPushButton('Moderate Hill (15°)')
+        self.hill_btn.setCheckable(True)
+        self.hill_btn.setStyleSheet(hill_off_style)
+        self.hill_btn.clicked.connect(lambda: self.load_scenario('hill'))
+        self.scenario_btn_group.addButton(self.hill_btn)
+        scenario_layout.addWidget(self.hill_btn)
+        
+        self.steep_btn = QPushButton('Steep Climb (30°)')
+        self.steep_btn.setCheckable(True)
+        self.steep_btn.setStyleSheet(steep_off_style)
+        self.steep_btn.clicked.connect(lambda: self.load_scenario('steep'))
+        self.scenario_btn_group.addButton(self.steep_btn)
+        scenario_layout.addWidget(self.steep_btn)
         
         self.scenario_group.setLayout(scenario_layout)
         layout.addWidget(self.scenario_group)
@@ -2735,17 +3974,38 @@ class EVSimulationApp(QMainWindow):
         btn_layout = QVBoxLayout(self.btn_layout_widget)
         
         self.run_btn = QPushButton('▶ Run Simulation')
-        self.run_btn.setStyleSheet('background-color: #4CAF50; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 5px;')
+        self.run_btn.setStyleSheet('''
+            QPushButton { background-color: #4CAF50; color: white; font-weight: bold; padding: 10px; border: none; border-radius: 5px; }
+            QPushButton:hover { background-color: #43A047; }
+            QPushButton:pressed { background-color: #2E7D32; }
+        ''')
         self.run_btn.clicked.connect(self.run_simulation)
         btn_layout.addWidget(self.run_btn)
         
         export_btn = QPushButton('💾 Export Results')
-        export_btn.setStyleSheet('background-color: #2196F3; color: white; font-weight: bold; padding: 8px; border: none; border-radius: 5px;')
+        export_btn.setStyleSheet('''
+            QPushButton { background-color: #2196F3; color: white; font-weight: bold; padding: 8px; border: none; border-radius: 5px; }
+            QPushButton:hover { background-color: #1E88E5; }
+            QPushButton:pressed { background-color: #1565C0; }
+        ''')
         export_btn.clicked.connect(self.export_results)
         btn_layout.addWidget(export_btn)
         
+        check_suitability_btn = QPushButton('🔍 Check Motor Suitability')
+        check_suitability_btn.setStyleSheet('''
+            QPushButton { background-color: #9C27B0; color: white; font-weight: bold; padding: 8px; border: none; border-radius: 5px; }
+            QPushButton:hover { background-color: #8E24AA; }
+            QPushButton:pressed { background-color: #6A1B9A; }
+        ''')
+        check_suitability_btn.clicked.connect(self.check_motor_suitability)
+        btn_layout.addWidget(check_suitability_btn)
+        
         reset_btn = QPushButton('🔄 Reset')
-        reset_btn.setStyleSheet('background-color: #FF9800; color: white; font-weight: bold; padding: 8px; border: none; border-radius: 5px;')
+        reset_btn.setStyleSheet('''
+            QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 8px; border: none; border-radius: 5px; }
+            QPushButton:hover { background-color: #FB8C00; }
+            QPushButton:pressed { background-color: #EF6C00; }
+        ''')
         reset_btn.clicked.connect(self.reset_simulation)
         btn_layout.addWidget(reset_btn)
         
@@ -2759,7 +4019,11 @@ class EVSimulationApp(QMainWindow):
         
         # Output value compute button - STICKY at bottom (outside scroll area)
         self.output_compute_btn = QPushButton('🧮 Compute Output Values')
-        self.output_compute_btn.setStyleSheet('background-color: #28a745; color: white; font-weight: bold; padding: 12px; border: none; border-radius: 5px; font-size: 14px;')
+        self.output_compute_btn.setStyleSheet('''
+            QPushButton { background-color: #28a745; color: white; font-weight: bold; padding: 12px; border: none; border-radius: 5px; font-size: 14px; }
+            QPushButton:hover { background-color: #218838; }
+            QPushButton:pressed { background-color: #1e7e34; }
+        ''')
         self.output_compute_btn.clicked.connect(self.compute_output_values)
         self.output_compute_btn.setVisible(False)  # Hidden by default, shown in Output mode
         self.output_compute_btn.setMinimumHeight(45)
@@ -2859,6 +4123,147 @@ class EVSimulationApp(QMainWindow):
         self.run_btn.setEnabled(True)
         # Status message updated by generate_graph_simulation_data
     
+    def check_motor_suitability(self):
+        """Check if the selected motor is suitable for vehicle requirements"""
+        import math
+        
+        # Get motor parameters
+        motor_key = self.motor_combo.currentText()
+        mode = self.mode_combo.currentText()
+        
+        if motor_key == 'Customize':
+            peak_torque = self.custom_peak_torque.value()
+            peak_power = self.custom_peak_power.value()
+            motor_name = f"Custom Motor ({peak_torque} Nm, {peak_power} W)"
+        else:
+            motor = GPM_MOTORS.get(motor_key, GPM_MOTORS['Default'])
+            peak_torque = motor['peak_torque_nm']
+            peak_power = motor['peak_power_w'] if mode == 'boost' else motor['continuous_power_w']
+            motor_name = motor['name']
+        
+        # Get vehicle parameters
+        gvw = EV_DEFAULTS['gvw']
+        gear_ratio = EV_DEFAULTS['gear_ratio']
+        gear_efficiency = EV_DEFAULTS['gear_efficiency'] / 100.0
+        wheel_radius = EV_DEFAULTS['wheel_radius']
+        cr = EV_DEFAULTS['cr']
+        cd = EV_DEFAULTS['cd']
+        air_density = EV_DEFAULTS['air_density']
+        frontal_area = EV_DEFAULTS['frontal_area']
+        num_motors = self.init_num_power_wheels.value()
+        
+        # Performance requirements from EV_DEFAULTS
+        target_max_speed_kmph = EV_DEFAULTS['max_speed']
+        target_slope_speed_kmph = EV_DEFAULTS['slope_speed']
+        target_gradeability_deg = EV_DEFAULTS['gradeability']
+        target_accel_time = EV_DEFAULTS['accel_period']
+        target_accel_speed = EV_DEFAULTS['accel_end_speed']
+        
+        results = []
+        overall_suitable = True
+        
+        # Test 1: Can achieve max speed on flat ground?
+        # At max speed, power required = resistance forces × speed
+        max_speed_ms = target_max_speed_kmph / 3.6
+        F_roll = cr * gvw * 9.81
+        F_drag = 0.5 * cd * air_density * frontal_area * (max_speed_ms ** 2)
+        F_total_flat = F_roll + F_drag
+        power_required_flat = F_total_flat * max_speed_ms
+        power_available = peak_power * num_motors * gear_efficiency
+        
+        flat_speed_pass = power_available >= power_required_flat
+        if not flat_speed_pass:
+            overall_suitable = False
+            max_achievable_speed = self._calculate_max_speed(peak_power, num_motors, gear_efficiency, gvw, cr, cd, air_density, frontal_area)
+            results.append(f"❌ Max Speed on Flat: FAIL\n   Required: {power_required_flat:.0f} W, Available: {power_available:.0f} W\n   Max achievable: {max_achievable_speed:.1f} km/h (target: {target_max_speed_kmph} km/h)")
+        else:
+            results.append(f"✅ Max Speed on Flat: PASS\n   Can achieve {target_max_speed_kmph} km/h with {power_required_flat:.0f} W (available: {power_available:.0f} W)")
+        
+        # Test 2: Can climb target gradient at slope speed?
+        gradient_rad = math.radians(target_gradeability_deg)
+        slope_speed_ms = target_slope_speed_kmph / 3.6
+        F_roll_slope = cr * gvw * 9.81 * math.cos(gradient_rad)
+        F_drag_slope = 0.5 * cd * air_density * frontal_area * (slope_speed_ms ** 2)
+        F_climb = gvw * 9.81 * math.sin(gradient_rad)
+        F_total_slope = F_roll_slope + F_drag_slope + F_climb
+        
+        # Check torque requirement
+        torque_required_per_wheel = (F_total_slope * wheel_radius) / (gear_ratio * gear_efficiency)
+        torque_required_per_motor = torque_required_per_wheel / num_motors
+        
+        gradient_pass = peak_torque >= torque_required_per_motor
+        if not gradient_pass:
+            overall_suitable = False
+            max_gradient = self._calculate_max_gradient(peak_torque, num_motors, gvw, gear_ratio, gear_efficiency, wheel_radius, cr, cd, air_density, frontal_area, slope_speed_ms)
+            results.append(f"❌ Gradient Climbing ({target_gradeability_deg}° at {target_slope_speed_kmph} km/h): FAIL\n   Required: {torque_required_per_motor:.1f} Nm/motor, Available: {peak_torque} Nm/motor\n   Max climbable: {max_gradient:.1f}°")
+        else:
+            results.append(f"✅ Gradient Climbing ({target_gradeability_deg}° at {target_slope_speed_kmph} km/h): PASS\n   Required: {torque_required_per_motor:.1f} Nm/motor, Available: {peak_torque} Nm/motor")
+        
+        # Test 3: Acceleration capability
+        # Simplified: check if torque is enough for reasonable acceleration
+        max_tractive_force = (peak_torque * num_motors * gear_ratio * gear_efficiency) / wheel_radius
+        max_acceleration = (max_tractive_force - F_roll) / gvw
+        estimated_accel_time = (target_accel_speed / 3.6) / max_acceleration if max_acceleration > 0 else float('inf')
+        
+        accel_pass = estimated_accel_time <= target_accel_time * 1.5  # Allow 50% margin
+        if not accel_pass:
+            overall_suitable = False
+            results.append(f"❌ Acceleration (0-{target_accel_speed} km/h in {target_accel_time}s): FAIL\n   Estimated time: {estimated_accel_time:.1f}s (target: {target_accel_time}s)\n   Max acceleration: {max_acceleration:.2f} m/s²")
+        else:
+            results.append(f"✅ Acceleration (0-{target_accel_speed} km/h in {target_accel_time}s): PASS\n   Estimated time: {estimated_accel_time:.1f}s\n   Max acceleration: {max_acceleration:.2f} m/s²")
+        
+        # Build result message
+        if overall_suitable:
+            title = "✅ Motor SUITABLE"
+            header = f"<b style='color: green; font-size: 16px;'>Motor is SUITABLE for this vehicle!</b><br><br>"
+        else:
+            title = "❌ Motor NOT SUITABLE"
+            header = f"<b style='color: red; font-size: 16px;'>Motor is NOT SUITABLE for this vehicle!</b><br><br>"
+        
+        details = f"<b>Motor:</b> {motor_name}<br>"
+        details += f"<b>Mode:</b> {mode.upper()}<br>"
+        details += f"<b>Number of Motors:</b> {num_motors}<br><br>"
+        details += "<b>Test Results:</b><br><pre>" + "\n\n".join(results) + "</pre>"
+        
+        # Show result dialog
+        msg = QMessageBox(self)
+        msg.setWindowTitle(title)
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        msg.setText(header + details)
+        msg.setIcon(QMessageBox.Icon.Information if overall_suitable else QMessageBox.Icon.Warning)
+        msg.exec()
+        
+        self.statusBar().showMessage(f"Motor suitability check: {'SUITABLE' if overall_suitable else 'NOT SUITABLE'}")
+    
+    def _calculate_max_speed(self, peak_power, num_motors, efficiency, gvw, cr, cd, air_density, frontal_area):
+        """Calculate maximum achievable speed given motor power"""
+        power_available = peak_power * num_motors * efficiency
+        # Iterative approximation
+        for speed_kmph in range(1, 200):
+            speed_ms = speed_kmph / 3.6
+            F_roll = cr * gvw * 9.81
+            F_drag = 0.5 * cd * air_density * frontal_area * (speed_ms ** 2)
+            power_required = (F_roll + F_drag) * speed_ms
+            if power_required > power_available:
+                return speed_kmph - 1
+        return 200
+    
+    def _calculate_max_gradient(self, peak_torque, num_motors, gvw, gear_ratio, gear_efficiency, wheel_radius, cr, cd, air_density, frontal_area, speed_ms):
+        """Calculate maximum climbable gradient given motor torque"""
+        import math
+        max_tractive_force = (peak_torque * num_motors * gear_ratio * gear_efficiency) / wheel_radius
+        F_drag = 0.5 * cd * air_density * frontal_area * (speed_ms ** 2)
+        
+        for gradient_deg in range(0, 90):
+            gradient_rad = math.radians(gradient_deg)
+            F_roll = cr * gvw * 9.81 * math.cos(gradient_rad)
+            F_climb = gvw * 9.81 * math.sin(gradient_rad)
+            F_total = F_roll + F_drag + F_climb
+            if F_total > max_tractive_force:
+                return gradient_deg - 1
+        return 90
+
+    
     def export_results(self):
         """Export simulation table data"""
         # Check if we have data to export
@@ -2929,23 +4334,48 @@ class EVSimulationApp(QMainWindow):
         motor_rpm = (speed_kmph * gear_ratio) / (2 * 3.14159 * wheel_radius * 0.001 * 60)
         self.init_motor_speed_rpm.setValue(motor_rpm)
         
-        # Formula 3: init_total_motor_torque based on mode and motor RPM
-        # IF(mode=boost, IF(RPM<500, 37, (2000*60)/(2*π*RPM)), IF(RPM<500, 19, (1000*60)/(2*π*RPM))) * 2
+        # Formula 3: init_total_motor_torque based on mode, motor selection, and motor RPM
+        # Get motor parameters from selection
+        motor_key = self.motor_combo.currentText()
         mode = self.mode_combo.currentText()
         
-        if mode == 'boost':
-            if motor_rpm < 500:
-                torque = 37  # Constant torque for low RPM (including 0)
-            else:
-                torque = (2000 * 60) / (2 * 3.14159 * motor_rpm)
-        else:  # eco mode
-            if motor_rpm < 500:
-                torque = 19  # Constant torque for low RPM (including 0)
-            else:
-                torque = (1000 * 60) / (2 * 3.14159 * motor_rpm)
+        # Get motor specs based on selection
+        if motor_key == 'Customize':
+            # Use custom input values
+            peak_torque = self.custom_peak_torque.value()
+            peak_power = self.custom_peak_power.value()
+            continuous_torque = peak_torque / 2  # Default assumption
+            continuous_power = peak_power / 2
+            base_rpm = 500  # Default
+        else:
+            # Use predefined motor specs from GPM_MOTORS
+            motor = GPM_MOTORS.get(motor_key, GPM_MOTORS['Default'])
+            peak_torque = motor['peak_torque_nm']
+            peak_power = motor['peak_power_w']
+            continuous_torque = motor['continuous_torque_nm']
+            continuous_power = motor['continuous_power_w']
+            base_rpm = motor['base_rpm']
         
-        total_torque = torque * 2
+        # Select torque and power based on mode (boost = peak, eco = continuous)
+        if mode == 'boost':
+            torque_per_motor = peak_torque
+            power_per_motor = peak_power
+        else:  # eco mode
+            torque_per_motor = continuous_torque
+            power_per_motor = continuous_power
+        
+        # Calculate torque based on motor RPM (constant torque below base RPM, constant power above)
+        if motor_rpm < base_rpm:
+            torque = torque_per_motor  # Constant torque region
+        else:
+            # Constant power region: P = (2π × RPM × T) / 60 → T = (P × 60) / (2π × RPM)
+            torque = (power_per_motor * 60) / (2 * 3.14159 * motor_rpm)
+        
+        # Total torque from all motors (currently using 2 motors)
+        num_power_wheels = self.init_num_power_wheels.value()
+        total_torque = torque * num_power_wheels
         self.init_total_motor_torque.setValue(total_torque)
+
         
         # Formula 4: init_per_motor_torque = total_torque / num_power_wheels
         num_power_wheels = self.init_num_power_wheels.value()
